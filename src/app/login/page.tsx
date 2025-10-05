@@ -16,8 +16,6 @@ import {
   UserGroupIcon,
   AcademicCapIcon
 } from '@heroicons/react/24/outline'
-import { UniversityLogo } from '../../components/ui/university-logo'
-import Image from 'next/image'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -54,19 +52,23 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* University Header */}
         <div className="text-center mb-8">
-          <div className="mb-4 flex justify-center">
-            <UniversityLogo size="lg" showText={false} />
+          <div className="mb-4">
+            <img
+              src="/assets/images/university/Zamzam_University_logo.svg.png"
+              alt="Zamzam University Logo"
+              className="h-24 w-auto mx-auto object-contain"
+            />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            University
+            Zamzam University
           </h1>
           <p className="text-gray-600 dark:text-gray-300 text-lg">
-            Attendance Management System
+            of Science and Technology
           </p>
           <div className="w-24 h-1 bg-gradient-to-r from-[#1B75BB] to-[#0d5a8a] mx-auto mt-3 rounded-full"></div>
         </div>
 
-        <Card className="border-2 border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+        <Card className="border-2 border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-lg">
           <CardHeader className="text-center pb-4">
             <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
               Attendance Management
