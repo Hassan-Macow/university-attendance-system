@@ -13,7 +13,6 @@ import {
   EyeIcon, 
   EyeSlashIcon, 
   ShieldCheckIcon, 
-  UserGroupIcon,
   AcademicCapIcon
 } from '@heroicons/react/24/outline'
 
@@ -155,27 +154,6 @@ export default function LoginPage() {
                 )}
               </Button>
             </form>
-            
-            <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                     <div className="flex items-center mb-3">
-                       <UserGroupIcon className="h-5 w-5 text-[#1B75BB] mr-2" />
-                       <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Demo Credentials</p>
-                     </div>
-              <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                <div className="flex justify-between">
-                  <span className="font-medium">SuperAdmin:</span>
-                  <span>admin@university.edu / admin123</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Dean:</span>
-                  <span>dean@cs.edu / dean123</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Lecturer:</span>
-                  <span>lecturer@cs.edu / lecturer123</span>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
