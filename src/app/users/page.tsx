@@ -35,16 +35,31 @@ interface User {
   updated_at: string
 }
 
+type UserRole = 'superadmin' | 'dean' | 'lecturer' | 'student'
+
+interface UserFormData {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+  campus_id: string
+  department_id: string
+  employee_id: string
+  reg_no: string
+  password: string
+}
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<UserFormData>({
+    id: '',
     name: '',
     email: '',
-    role: 'lecturer' as const,
+    role: 'lecturer',
     campus_id: '',
     department_id: '',
     employee_id: '',
@@ -132,6 +147,7 @@ export default function UsersPage() {
       
       setUsers([...users, newUser])
       setFormData({
+        id: '',
         name: '',
         email: '',
         role: 'lecturer',
@@ -252,7 +268,7 @@ export default function UsersPage() {
                     <select
                       id="role"
                       value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
                     >
                       <option value="lecturer">Lecturer</option>
