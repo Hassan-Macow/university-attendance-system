@@ -1,0 +1,207 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 201 100% 40%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 213 31% 91%;
+    --card: 222 47% 11%;
+    --card-foreground: 213 31% 91%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 84% 5%;
+    --secondary: 215 28% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 215 28% 17%;
+    --muted-foreground: 217 10% 64.9%;
+    --accent: 215 28% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 215 28% 17%;
+    --input: 215 28% 17%;
+    --ring: 217 91% 60%;
+  }
+
+  /* Alternative modern dark theme - softer and more readable */
+  .dark-modern {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 142.1 76.2% 36.3%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 142.1 76.2% 36.3%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* Enhanced dark mode form styling */
+  .dark input[type="text"],
+  .dark input[type="email"],
+  .dark input[type="password"],
+  .dark input[type="number"],
+  .dark textarea,
+  .dark select {
+    @apply bg-slate-800/50 border-slate-600 text-slate-100 placeholder-slate-400;
+    @apply focus:bg-slate-800 focus:border-blue-500 focus:ring-blue-500/20;
+  }
+  
+  .dark input[type="text"]:focus,
+  .dark input[type="email"]:focus,
+  .dark input[type="password"]:focus,
+  .dark input[type="number"]:focus,
+  .dark textarea:focus,
+  .dark select:focus {
+    @apply ring-2 ring-blue-500/20 border-blue-500;
+  }
+  
+  /* Enhanced dark mode cards */
+  .dark .card {
+    @apply bg-slate-800/30 border-slate-700/50;
+  }
+  
+  /* Better dark mode table styling */
+  .dark table {
+    @apply border-slate-700;
+  }
+  
+  .dark th {
+    @apply bg-slate-800/50 border-slate-700 text-slate-200;
+  }
+  
+  .dark td {
+    @apply border-slate-700/50 text-slate-300;
+  }
+  
+  .dark tr:hover {
+    @apply bg-slate-800/20;
+  }
+  
+  /* Enhanced dark mode buttons */
+  .dark .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white;
+  }
+  
+  .dark .btn-secondary {
+    @apply bg-slate-700 hover:bg-slate-600 text-slate-200;
+  }
+  
+  /* Better dark mode sidebar */
+  .dark .sidebar {
+    @apply bg-slate-900/95 border-slate-800;
+  }
+  
+  /* Enhanced dark mode header */
+  .dark .header {
+    @apply bg-slate-800/50 border-slate-700;
+  }
+  
+  /* Modern dark theme specific styling */
+  .dark-modern input[type="text"],
+  .dark-modern input[type="email"],
+  .dark-modern input[type="password"],
+  .dark-modern input[type="number"],
+  .dark-modern textarea,
+  .dark-modern select {
+    @apply bg-zinc-800/60 border-zinc-600 text-zinc-100 placeholder-zinc-400;
+    @apply focus:bg-zinc-800 focus:border-emerald-500 focus:ring-emerald-500/20;
+    @apply shadow-sm;
+  }
+  
+  .dark-modern input[type="text"]:focus,
+  .dark-modern input[type="email"]:focus,
+  .dark-modern input[type="password"]:focus,
+  .dark-modern input[type="number"]:focus,
+  .dark-modern textarea:focus,
+  .dark-modern select:focus {
+    @apply ring-2 ring-emerald-500/20 border-emerald-500 shadow-lg;
+  }
+  
+  /* Modern dark theme cards */
+  .dark-modern .card {
+    @apply bg-zinc-800/40 border-zinc-700/60 shadow-lg;
+  }
+  
+  /* Modern dark theme tables */
+  .dark-modern table {
+    @apply border-zinc-700;
+  }
+  
+  .dark-modern th {
+    @apply bg-zinc-800/60 border-zinc-700 text-zinc-200 font-medium;
+  }
+  
+  .dark-modern td {
+    @apply border-zinc-700/60 text-zinc-300;
+  }
+  
+  .dark-modern tr:hover {
+    @apply bg-zinc-800/30;
+  }
+  
+  /* Modern dark theme buttons */
+  .dark-modern .btn-primary {
+    @apply bg-emerald-600 hover:bg-emerald-700 text-white shadow-md;
+  }
+  
+  .dark-modern .btn-secondary {
+    @apply bg-zinc-700 hover:bg-zinc-600 text-zinc-200 shadow-sm;
+  }
+  
+  /* Modern dark theme sidebar */
+  .dark-modern .sidebar {
+    @apply bg-zinc-900/95 border-zinc-800 shadow-xl;
+  }
+  
+  /* Modern dark theme header */
+  .dark-modern .header {
+    @apply bg-zinc-800/60 border-zinc-700 shadow-md;
+  }
+}
