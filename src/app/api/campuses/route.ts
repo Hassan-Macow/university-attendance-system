@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://qnnmpyjirjnxpwnajvid.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFubm1weWppcmpueHB3bmFqdmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4MzMxNDIsImV4cCI6MjA3NTQwOTE0Mn0.wdFsPsDgyKUvmeCRkDWzlpTlx_4gvdA6YumvV8gRb3s'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export async function GET(request: NextRequest) {
   try {
     console.log('=== Fetching Campuses from Database ===')
-    
-    // Use the working Supabase client from the lib
-    const { supabase } = await import('@/lib/supabase')
     
     const { data: campuses, error } = await supabase
       .from('campuses')
