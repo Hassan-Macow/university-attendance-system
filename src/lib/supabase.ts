@@ -15,14 +15,18 @@ const supabaseConfig = {
   }
 }
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase environment variables not found. Using placeholder client.')
+// Log the environment variables for debugging (only URL, not the key)
+console.log('Supabase URL:', supabaseUrl || 'NOT SET')
+console.log('Supabase Key exists:', !!supabaseAnonKey)
+
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'https://placeholder.supabase.co') {
+  console.warn('Supabase environment variables not found or using placeholder. Using placeholder client.')
   // Create a placeholder client for build time
   supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseConfig)
 } else {
   try {
     supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseConfig)
-    console.log('Supabase client initialized successfully')
+    console.log('Supabase client initialized successfully with real credentials')
   } catch (error) {
     console.error('Failed to initialize Supabase client:', error)
     throw new Error('Failed to initialize Supabase client')
