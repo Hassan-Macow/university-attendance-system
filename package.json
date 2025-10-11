@@ -1,6 +1,6 @@
 {
   "name": "attendance-management-system",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A comprehensive attendance management system for universities with multiple campuses and departments",
   "private": true,
   "scripts": {
