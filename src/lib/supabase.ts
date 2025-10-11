@@ -1,14 +1,10 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // Validate environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing required Supabase environment variables')
-}
-
-// Only create the client if we have valid URLs
+// Only create the client if we have valid environment variables
 let supabase: SupabaseClient
 
 const supabaseConfig = {
@@ -19,12 +15,18 @@ const supabaseConfig = {
   }
 }
 
-try {
-  supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseConfig)
-  console.log('Supabase client initialized successfully')
-} catch (error) {
-  console.error('Failed to initialize Supabase client:', error)
-  throw new Error('Failed to initialize Supabase client')
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase environment variables not found. Using placeholder client.')
+  // Create a placeholder client for build time
+  supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseConfig)
+} else {
+  try {
+    supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseConfig)
+    console.log('Supabase client initialized successfully')
+  } catch (error) {
+    console.error('Failed to initialize Supabase client:', error)
+    throw new Error('Failed to initialize Supabase client')
+  }
 }
 
 // Export types and client
