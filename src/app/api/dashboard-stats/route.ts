@@ -1,35 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 export async function GET() {
   try {
     console.log('=== Fetching Dashboard Stats ===')
-    console.log('Supabase configured:', isSupabaseConfigured)
-
-    if (!isSupabaseConfigured) {
-      // Return mock data if Supabase is not configured
-      console.log('Using mock dashboard data')
-      return NextResponse.json({
-        success: true,
-        data: {
-          total_students: 1250,
-          total_lecturers: 85,
-          total_courses: 156,
-          total_departments: 12,
-          total_campuses: 4,
-          attendance_rate_today: 87.5,
-          attendance_rate_week: 82.3,
-          attendance_rate_month: 85.1,
-          students_change: '+12%',
-          lecturers_change: '+5%',
-          courses_change: '+8%',
-          departments_change: '+2%',
-          attendance_today_change: '+3.2%',
-          attendance_week_change: '+1.8%',
-          attendance_month_change: '+2.5%'
-        }
-      })
-    }
+    console.log('Supabase configured: true')
 
     // Fetch real data from Supabase
     console.log('Fetching real data from Supabase...')

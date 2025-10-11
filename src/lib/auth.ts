@@ -1,5 +1,4 @@
 import { supabase } from './supabase'
-import { isSupabaseConfigured } from './supabase'
 import { User } from './types'
 
 export interface AuthUser extends User {
@@ -8,10 +7,7 @@ export interface AuthUser extends User {
 
 export async function signIn(email: string, password: string): Promise<{ user: AuthUser | null; error: string | null }> {
   try {
-    // If Supabase is not configured, fall back to demo users
-    if (!isSupabaseConfigured) {
-      return await signInDemo(email, password)
-    }
+    // Always use real Supabase authentication
 
     // First, try Supabase Auth (for original admin users)
     try {
@@ -170,10 +166,8 @@ export async function signOut(): Promise<void> {
     localStorage.removeItem('auth_user')
   }
   
-  // If Supabase is configured, sign out from Supabase Auth
-  if (isSupabaseConfigured) {
-    await supabase.auth.signOut()
-  }
+  // Sign out from Supabase Auth
+  await supabase.auth.signOut()
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
@@ -190,26 +184,24 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     }
 
     // If no localStorage user, try Supabase Auth session
-    if (isSupabaseConfigured) {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      
-      if (!error && session?.user) {
-        // Get user profile from our users table
-        const { data: userProfile, error: profileError } = await supabase
-          .from('users')
-          .select(`
-            *,
-            campuses!inner(*),
-            departments(*)
-          `)
-          .eq('email', session.user.email)
-          .single()
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    if (!error && session?.user) {
+      // Get user profile from our users table
+      const { data: userProfile, error: profileError } = await supabase
+        .from('users')
+        .select(`
+          *,
+          campuses!inner(*),
+          departments(*)
+        `)
+        .eq('email', session.user.email)
+        .single()
 
-        if (userProfile) {
-          return {
-            ...userProfile,
-            isAuthenticated: true
-          }
+      if (userProfile) {
+        return {
+          ...userProfile,
+          isAuthenticated: true
         }
       }
     }

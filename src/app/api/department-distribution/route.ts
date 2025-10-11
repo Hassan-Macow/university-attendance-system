@@ -1,24 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 export async function GET() {
   try {
     console.log('=== Fetching Department Distribution ===')
-    console.log('Supabase configured:', isSupabaseConfigured)
-
-    if (!isSupabaseConfigured) {
-      // Return mock data if Supabase is not configured
-      console.log('Using mock department distribution data')
-      return NextResponse.json({
-        success: true,
-        data: [
-          { name: 'Computer Science', students: 450, color: '#8884d8' },
-          { name: 'Engineering', students: 320, color: '#82ca9d' },
-          { name: 'Business', students: 280, color: '#ffc658' },
-          { name: 'Medicine', students: 200, color: '#ff7300' }
-        ]
-      })
-    }
+    console.log('Supabase configured: true')
 
     // Fetch real data from Supabase
     console.log('Fetching real department distribution from Supabase...')

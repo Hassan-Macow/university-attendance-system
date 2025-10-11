@@ -79,41 +79,39 @@ export default function SettingsPage() {
       }
 
       // Import Supabase
-      const { supabase, isSupabaseConfigured } = await import('@/lib/supabase')
+      const { supabase } = await import('@/lib/supabase')
       
       // Check if user exists in Supabase Auth (for original admin users)
-      if (isSupabaseConfigured) {
-        try {
-          // First, verify current password by trying to sign in
-          const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-            email: currentUser.email,
-            password: currentPassword
+      try {
+        // First, verify current password by trying to sign in
+        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: currentUser.email,
+          password: currentPassword
+        })
+
+        if (!signInError && authData.user) {
+          // Current password is correct, now update it
+          const { error: updateError } = await supabase.auth.updateUser({
+            password: newPassword
           })
 
-          if (!signInError && authData.user) {
-            // Current password is correct, now update it
-            const { error: updateError } = await supabase.auth.updateUser({
-              password: newPassword
-            })
-
-            if (!updateError) {
-              // Successfully updated in Supabase Auth
-              showToast.success('Success', 'Password changed successfully!')
-              setCurrentPassword('')
-              setNewPassword('')
-              setConfirmPassword('')
-              return
-            } else {
-              showToast.error('Error', 'Failed to update password in Supabase Auth')
-              return
-            }
+          if (!updateError) {
+            // Successfully updated in Supabase Auth
+            showToast.success('Success', 'Password changed successfully!')
+            setCurrentPassword('')
+            setNewPassword('')
+            setConfirmPassword('')
+            return
           } else {
-            // Current password is incorrect for Supabase Auth, try custom method
-            console.log('Current password incorrect for Supabase Auth, trying custom method...')
+            showToast.error('Error', 'Failed to update password in Supabase Auth')
+            return
           }
-        } catch (authError) {
-          console.log('Supabase Auth verification failed, trying custom method...')
+        } else {
+          // Current password is incorrect for Supabase Auth, try custom method
+          console.log('Current password incorrect for Supabase Auth, trying custom method...')
         }
+      } catch (authError) {
+        console.log('Supabase Auth verification failed, trying custom method...')
       }
 
       // Fallback: Try custom user table method

@@ -1,27 +1,10 @@
 import { NextResponse } from 'next/server'
-import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 export async function GET() {
   try {
     console.log('=== Fetching Attendance Trend ===')
-    console.log('Supabase configured:', isSupabaseConfigured)
-
-    if (!isSupabaseConfigured) {
-      // Return mock data if Supabase is not configured
-      console.log('Using mock attendance trend data')
-      return NextResponse.json({
-        success: true,
-        data: [
-          { name: 'Mon', attendance: 88, students: 1200 },
-          { name: 'Tue', attendance: 90, students: 1250 },
-          { name: 'Wed', attendance: 82, students: 1180 },
-          { name: 'Thu', attendance: 92, students: 1300 },
-          { name: 'Fri', attendance: 93, students: 1350 },
-          { name: 'Sat', attendance: 78, students: 1100 },
-          { name: 'Sun', attendance: 65, students: 900 }
-        ]
-      })
-    }
+    console.log('Supabase configured: true')
 
     // Fetch real data from Supabase
     console.log('Fetching real attendance trend from Supabase...')
