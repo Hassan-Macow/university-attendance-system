@@ -157,6 +157,7 @@ async function signInDemo(email: string, password: string): Promise<{ user: Auth
   
   const authUser: AuthUser = {
     ...userWithoutPassword,
+    department_id: userWithoutPassword.department_id || null,
     isAuthenticated: true
   }
 

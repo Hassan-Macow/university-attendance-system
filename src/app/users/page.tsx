@@ -54,6 +54,7 @@ export default function UsersPage() {
     name: '',
     email: '',
     role: 'lecturer',
+    campus_id: '',
     department_id: '',
     employee_id: '',
     reg_no: '',
@@ -216,9 +217,10 @@ export default function UsersPage() {
       name: user.name,
       email: user.email,
       role: user.role,
+      campus_id: '',
       department_id: user.department_id || '',
-      employee_id: user.employee_id || '',
-      reg_no: user.reg_no || '',
+      employee_id: '',
+      reg_no: '',
       password: '', // Don't pre-fill password for security
       campuses: [] // Will be populated from user's campuses
     })
@@ -379,6 +381,7 @@ export default function UsersPage() {
         name: '',
         email: '',
         role: 'lecturer',
+        campus_id: '',
         department_id: '',
         employee_id: '',
         reg_no: '',
@@ -532,6 +535,7 @@ export default function UsersPage() {
         name: '',
         email: '',
         role: 'lecturer',
+        campus_id: '',
         department_id: '',
         employee_id: '',
         reg_no: '',
@@ -849,7 +853,7 @@ export default function UsersPage() {
                           </span>
                         </td>
                         <td className="p-3 text-gray-600 dark:text-gray-400">
-                          {user.employee_id || 'N/A'}
+                          N/A
                         </td>
                         <td className="p-3 text-gray-600 dark:text-gray-400">
                           {new Date(user.created_at).toLocaleDateString()}

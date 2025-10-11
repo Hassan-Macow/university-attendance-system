@@ -137,7 +137,7 @@ export default function StudentDashboard() {
               <MapPin className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{user.campuses?.name || 'N/A'}</div>
+              <div className="text-2xl font-bold">Main Campus</div>
               <p className="text-xs text-muted-foreground">
                 Primary campus
               </p>

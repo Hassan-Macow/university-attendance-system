@@ -194,7 +194,7 @@ export default function DeanDashboard() {
               Welcome back, {user?.name?.split(' ')[0]}!
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Dean Dashboard - Department Overview - {user.departments?.name || 'Your Department'}
+              Dean Dashboard - Department Overview
             </p>
           </div>
 

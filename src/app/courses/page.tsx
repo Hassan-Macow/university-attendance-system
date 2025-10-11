@@ -447,7 +447,7 @@ export default function CoursesPage() {
                         {batches.find(batch => batch.id === course.batch_id)?.name || 'N/A'}
                       </TableCell>
                       <TableCell>
-                        {course.lecturers?.users?.name || 'N/A'}
+                        {course.lecturers?.name || 'N/A'}
                       </TableCell>
                       <TableCell>{course.credits}</TableCell>
                       <TableCell>
