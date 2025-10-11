@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Plus, GraduationCap, Edit, Trash2, Upload, FileSpreadsheet, Download } from 'lucide-react'
 import { Student, Department, Batch } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
+import { ToastContainer, showToast } from '@/components/ui/toast'
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([])
@@ -111,7 +112,7 @@ export default function StudentsPage() {
       // Get campus_id from selected department
       const selectedDepartment = departments.find(d => d.id === formData.department_id)
       if (!selectedDepartment) {
-        alert('Please select a valid department')
+        showToast.error('Invalid Selection', 'Please select a valid department')
         return
       }
 
@@ -135,9 +136,9 @@ export default function StudentsPage() {
 
       if (error) {
         if (error.code === '23505') {
-          alert('Student with this registration number already exists')
+          showToast.error('Duplicate Entry', 'Student with this registration number already exists')
         } else {
-          alert(`Failed to create student: ${error.message}`)
+          showToast.error('Creation Failed', `Failed to create student: ${error.message}`)
         }
         return
       }
@@ -146,11 +147,11 @@ export default function StudentsPage() {
         setStudents([data[0], ...students])
         setFormData({ full_name: '', reg_no: '', department_id: '', batch_id: '', email: '', phone: '' })
         setShowForm(false)
-        alert('Student created successfully!')
+        showToast.success('Success!', 'Student created successfully')
       }
     } catch (error) {
       console.error('Failed to create student:', error)
-      alert('Failed to create student')
+      showToast.error('Error', 'Failed to create student')
     } finally {
       setIsCreating(false)
     }
@@ -180,7 +181,7 @@ export default function StudentsPage() {
           file.name.endsWith('.csv')) {
         setUploadFile(file)
       } else {
-        alert('Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file')
+        showToast.error('Invalid File', 'Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file')
       }
     }
   }
@@ -200,16 +201,16 @@ export default function StudentsPage() {
       window.URL.revokeObjectURL(url)
       link.remove()
       
-      alert('Template downloaded successfully!')
+      showToast.success('Success!', 'Template downloaded successfully')
     } catch (error) {
       console.error('Error downloading template:', error)
-      alert('Failed to download template')
+      showToast.error('Download Failed', 'Failed to download template')
     }
   }
 
   const handleBulkUpload = async () => {
     if (!uploadFile) {
-      alert('Please select a file to upload')
+      showToast.warning('No File Selected', 'Please select a file to upload')
       return
     }
 
@@ -239,16 +240,16 @@ export default function StudentsPage() {
       console.log('Result:', result)
 
       if (result.success) {
-        alert(`Successfully uploaded ${result.count} students!`)
+        showToast.success('Upload Complete!', `Successfully uploaded ${result.count} students`)
         setShowBulkUpload(false)
         setUploadFile(null)
         fetchStudents() // Refresh the list
       } else {
-        alert(`Upload failed: ${result.error || 'Unknown error'}`)
+        showToast.error('Upload Failed', result.error || 'Unknown error')
       }
     } catch (error) {
       console.error('Upload error:', error)
-      alert(`Upload failed: ${error instanceof Error ? error.message : 'Please try again'}`)
+      showToast.error('Upload Failed', error instanceof Error ? error.message : 'Please try again')
     } finally {
       setIsUploading(false)
       setUploadProgress(0)
@@ -257,7 +258,7 @@ export default function StudentsPage() {
 
   const handleAssignDepartments = async () => {
     if (!selectedDepartmentId || !selectedBatchId) {
-      alert('Please select both department and batch for all students')
+      showToast.warning('Incomplete Selection', 'Please select both department and batch for all students')
       return
     }
 
@@ -293,7 +294,7 @@ export default function StudentsPage() {
       console.log('Response result:', result)
 
       if (result.success) {
-        alert(`Successfully created ${result.imported} students!`)
+        showToast.success('Success!', `Successfully created ${result.imported} students`)
         setShowBulkUpload(false)
         setShowAssignment(false)
         setUploadedStudents([])
@@ -303,11 +304,11 @@ export default function StudentsPage() {
         setSelectedBatchId('')
         fetchStudents() // Refresh the list
       } else {
-        alert(`Creation failed: ${result.error}`)
+        showToast.error('Creation Failed', result.error)
       }
     } catch (error) {
       console.error('Creation error:', error)
-      alert(`Failed to create students: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      showToast.error('Error', `Failed to create students: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsUploading(false)
     }
@@ -315,6 +316,7 @@ export default function StudentsPage() {
 
   return (
     <MainLayout>
+      <ToastContainer />
       <div className="min-h-screen bg-background">
         <div className="p-8">
           <div className="space-y-6">
