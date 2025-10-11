@@ -3,8 +3,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 // Validate environment variables
 // Use fallback for build time, but real values will be used at runtime
 // Force rebuild - Digital Ocean deployment
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://gmmapyjirjnoxpunajvid.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbWFweWppcmpub3hwdW5hanZpZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzI4MzAxMTcyLCJleHAiOjIwNDM4NzcxNzJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbWFweWppcmpub3hwdW5hanZpZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzI4MzAxMTcyLCJleHAiOjIwNDM4NzcxNzJ9.9sZS16ImfubZ41LCJpYXQiOjE3MjgzMDExNzIsImV4cCI6MjA0Mzg3NzE3Mn0.wdFsPsDgyKlVmmeCRk6MzIpT1x_4gvdA6YumvV8gRb3s'
+// Check for both undefined and empty string
+const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_URL.trim()) || 'https://gmmapyjirjnoxpunajvid.supabase.co'
+const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.trim()) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbWFweWppcmpub3hwdW5hanZpZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzI4MzAxMTcyLCJleHAiOjIwNDM4NzcxNzJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbWFweWppcmpub3hwdW5hanZpZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzI4MzAxMTcyLCJleHAiOjIwNDM4NzcxNzJ9.9sZS16ImfubZ41LCJpYXQiOjE3MjgzMDExNzIsImV4cCI6MjA0Mzg3NzE3Mn0.wdFsPsDgyKlVmmeCRk6MzIpT1x_4gvdA6YumvV8gRb3s'
 
 // Only create the client if we have valid environment variables
 let supabase: SupabaseClient
