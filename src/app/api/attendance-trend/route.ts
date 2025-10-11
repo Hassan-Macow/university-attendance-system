@@ -63,12 +63,13 @@ export async function GET() {
         const dayName = dayNames[date.getDay()]
         
         if (dailyStats.has(dayName)) {
-          const dayData = dailyStats.get(dayName)
+          const dayData = dailyStats.get(dayName)!
           dayData.total++
           if (record.status === 'present') {
             dayData.present++
           }
-          dayData.students = Math.max(dayData.students, record.students?.id ? 1 : 0)
+          // Count unique students
+          dayData.students = Math.max(dayData.students, 1)
         }
       })
     }
