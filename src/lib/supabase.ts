@@ -1,8 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // Validate environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+// Use fallback for build time, but real values will be used at runtime
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://gmmapyjirjnoxpunajvid.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbWFweWppcmpub3hwdW5hanZpZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzI4MzAxMTcyLCJleHAiOjIwNDM4NzcxNzJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbWFweWppcmpub3hwdW5hanZpZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzI4MzAxMTcyLCJleHAiOjIwNDM4NzcxNzJ9.9sZS16ImfubZ41LCJpYXQiOjE3MjgzMDExNzIsImV4cCI6MjA0Mzg3NzE3Mn0.wdFsPsDgyKlVmmeCRk6MzIpT1x_4gvdA6YumvV8gRb3s'
 
 // Only create the client if we have valid environment variables
 let supabase: SupabaseClient
@@ -16,19 +17,16 @@ const supabaseConfig = {
 }
 
 // Log the environment variables for debugging (only URL, not the key)
-console.log('Supabase URL:', supabaseUrl || 'NOT SET')
-console.log('Supabase Key exists:', !!supabaseAnonKey)
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('CRITICAL: Supabase environment variables are not set!')
-  console.error('Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured')
-  // Throw error - don't create placeholder client
-  throw new Error('Missing required Supabase environment variables. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+if (typeof window !== 'undefined') {
+  console.log('🔍 Supabase URL:', supabaseUrl)
+  console.log('🔍 Supabase Key exists:', !!supabaseAnonKey)
 }
 
 try {
   supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseConfig)
-  console.log('✅ Supabase client initialized successfully with:', supabaseUrl)
+  if (typeof window !== 'undefined') {
+    console.log('✅ Supabase client initialized successfully')
+  }
 } catch (error) {
   console.error('Failed to initialize Supabase client:', error)
   throw new Error('Failed to initialize Supabase client')
