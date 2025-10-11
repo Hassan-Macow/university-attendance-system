@@ -21,6 +21,8 @@ import {
   IconCheck,
   IconX
 } from '@tabler/icons-react'
+import { showToast } from '@/components/ui/toast'
+import { getCurrentUser } from '@/lib/auth'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
@@ -48,30 +50,109 @@ export default function SettingsPage() {
     // Mock save functionality
     await new Promise(resolve => setTimeout(resolve, 1000))
     setIsSaving(false)
-    alert('Settings saved successfully!')
+    showToast.success('Success', 'Settings saved successfully!')
   }
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
-      alert('New passwords do not match')
+      showToast.error('Validation Error', 'New passwords do not match')
       return
     }
 
     if (newPassword.length < 8) {
-      alert('Password must be at least 8 characters long')
+      showToast.error('Validation Error', 'Password must be at least 8 characters long')
+      return
+    }
+
+    if (!currentPassword) {
+      showToast.error('Validation Error', 'Please enter your current password')
       return
     }
 
     setIsChangingPassword(true)
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      alert('Password changed successfully!')
+      // Get current user
+      const currentUser = await getCurrentUser()
+      if (!currentUser) {
+        showToast.error('Error', 'User not found. Please log in again.')
+        return
+      }
+
+      // Import Supabase
+      const { supabase, isSupabaseConfigured } = await import('@/lib/supabase')
+      
+      // Check if user exists in Supabase Auth (for original admin users)
+      if (isSupabaseConfigured) {
+        try {
+          // First, verify current password by trying to sign in
+          const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: currentUser.email,
+            password: currentPassword
+          })
+
+          if (!signInError && authData.user) {
+            // Current password is correct, now update it
+            const { error: updateError } = await supabase.auth.updateUser({
+              password: newPassword
+            })
+
+            if (!updateError) {
+              // Successfully updated in Supabase Auth
+              showToast.success('Success', 'Password changed successfully!')
+              setCurrentPassword('')
+              setNewPassword('')
+              setConfirmPassword('')
+              return
+            } else {
+              showToast.error('Error', 'Failed to update password in Supabase Auth')
+              return
+            }
+          } else {
+            // Current password is incorrect for Supabase Auth, try custom method
+            console.log('Current password incorrect for Supabase Auth, trying custom method...')
+          }
+        } catch (authError) {
+          console.log('Supabase Auth verification failed, trying custom method...')
+        }
+      }
+
+      // Fallback: Try custom user table method
+      // Verify current password
+      const { data: userData, error: verifyError } = await supabase
+        .from('users')
+        .select('password_hash')
+        .eq('id', currentUser.id)
+        .single()
+
+      if (verifyError || !userData) {
+        showToast.error('Error', 'Failed to verify current password')
+        return
+      }
+
+      // Check if current password matches
+      if (userData.password_hash !== currentPassword) {
+        showToast.error('Error', 'Current password is incorrect')
+        return
+      }
+
+      // Update password in custom users table
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ password_hash: newPassword })
+        .eq('id', currentUser.id)
+
+      if (updateError) {
+        showToast.error('Error', 'Failed to update password')
+        return
+      }
+
+      showToast.success('Success', 'Password changed successfully!')
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (error) {
-      alert('Error changing password')
+      console.error('Error changing password:', error)
+      showToast.error('Error', 'Failed to change password')
     } finally {
       setIsChangingPassword(false)
     }
@@ -79,7 +160,7 @@ export default function SettingsPage() {
 
   const handleResetPassword = async () => {
     if (!resetEmail) {
-      alert('Please enter an email address')
+      showToast.error('Validation Error', 'Please enter an email address')
       return
     }
 
@@ -87,10 +168,10 @@ export default function SettingsPage() {
     try {
       // Mock API call
       await new Promise(resolve => setTimeout(resolve, 1000))
-      alert('Password reset email sent!')
+      showToast.success('Success', 'Password reset email sent!')
       setResetEmail('')
     } catch (error) {
-      alert('Error sending reset email')
+      showToast.error('Error', 'Failed to send reset email')
     } finally {
       setIsResettingPassword(false)
     }

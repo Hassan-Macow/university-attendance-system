@@ -1,12 +1,23 @@
-export interface User {
+export type UserRole = 'superadmin' | 'dean' | 'lecturer' | 'student';
+
+export interface BaseUser {
   id: string;
   name: string;
   email: string;
-  role: 'superadmin' | 'dean' | 'lecturer';
+  role: UserRole;
   campus_id: string;
-  department_id?: string;
+  department_id: string | null;
   created_at: string;
   updated_at: string;
+  is_active?: boolean;
+}
+
+export interface User extends BaseUser {
+  // Add any user-specific fields here
+}
+
+export interface AuthUser extends BaseUser {
+  // Add any auth-specific user fields here
 }
 
 export interface Campus {
@@ -69,6 +80,11 @@ export interface Course {
   credits: number;
   created_at: string;
   updated_at: string;
+  lecturers?: {
+    id: string;
+    name: string;
+    email: string;
+  };
 }
 
 export interface ClassSession {
@@ -121,6 +137,13 @@ export interface DashboardStats {
   attendance_rate_today: number;
   attendance_rate_week: number;
   attendance_rate_month: number;
+  students_change?: string;
+  lecturers_change?: string;
+  courses_change?: string;
+  departments_change?: string;
+  attendance_today_change?: string;
+  attendance_week_change?: string;
+  attendance_month_change?: string;
 }
 
 export interface ApiResponse<T> {

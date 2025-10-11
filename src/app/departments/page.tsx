@@ -7,14 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Building2, Edit, Trash2 } from 'lucide-react'
+import { Plus, Building2, Edit } from 'lucide-react'
 import { Department, Campus } from '@/lib/types'
+import { showToast } from '@/components/ui/toast'
 
 export default function DepartmentsPage() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [campuses, setCampuses] = useState<Campus[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -28,13 +31,29 @@ export default function DepartmentsPage() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await fetch('/api/departments')
-      const data = await response.json()
-      if (data.data) {
-        setDepartments(data.data)
+      console.log('=== Fetching Departments from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: departments, error } = await supabase
+        .from('departments')
+        .select(`
+          *,
+          campuses!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Departments from database:', { data: departments, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch departments from database')
+        return
       }
+
+      setDepartments(departments || [])
     } catch (error) {
       console.error('Failed to fetch departments:', error)
+      showToast.error('Error', 'Failed to fetch departments')
     } finally {
       setIsLoading(false)
     }
@@ -42,13 +61,26 @@ export default function DepartmentsPage() {
 
   const fetchCampuses = async () => {
     try {
-      const response = await fetch('/api/campuses')
-      const data = await response.json()
-      if (data.data) {
-        setCampuses(data.data)
+      console.log('=== Fetching Campuses from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: campuses, error } = await supabase
+        .from('campuses')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      console.log('Campuses from database:', { data: campuses, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch campuses from database')
+        return
       }
+
+      setCampuses(campuses || [])
     } catch (error) {
       console.error('Failed to fetch campuses:', error)
+      showToast.error('Error', 'Failed to fetch campuses')
     }
   }
 
@@ -57,29 +89,107 @@ export default function DepartmentsPage() {
     setIsCreating(true)
 
     try {
-      const response = await fetch('/api/departments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      })
-
-      const data = await response.json()
+      console.log('=== Creating Department in Database ===')
+      console.log('Form data:', formData)
       
-      if (data.data) {
-        setDepartments([data.data, ...departments])
-        setFormData({ name: '', campus_id: '' })
-        setShowForm(false)
-      } else {
-        alert(data.error || 'Failed to create department')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: department, error } = await supabase
+        .from('departments')
+        .insert({
+          name: formData.name,
+          campus_id: formData.campus_id
+        })
+        .select(`
+          *,
+          campuses!inner(*)
+        `)
+        .single()
+
+      console.log('Database response:', { data: department, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Creation Failed', `Failed to create department: ${error.message}`)
+        return
       }
+
+      console.log('Department created successfully, updating list')
+      setDepartments([department, ...departments])
+      setFormData({ name: '', campus_id: '' })
+      setShowForm(false)
+      showToast.success('Department Created', 'Department has been created successfully in database!')
     } catch (error) {
       console.error('Failed to create department:', error)
-      alert('Failed to create department')
+      showToast.error('Creation Failed', 'Failed to create department')
     } finally {
       setIsCreating(false)
     }
+  }
+
+  const handleEditDepartment = (department: Department) => {
+    setEditingId(department.id)
+    setIsEditing(true)
+    setFormData({
+      name: department.name,
+      campus_id: department.campus_id
+    })
+    setShowForm(true)
+  }
+
+  const handleUpdateDepartment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingId) return
+
+    setIsCreating(true)
+
+    try {
+      console.log('=== Updating Department ===')
+      console.log('Form data:', formData)
+      
+      const response = await fetch('/api/departments', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: editingId,
+          ...formData
+        }),
+      })
+
+      console.log('Response status:', response.status)
+      const data = await response.json()
+      console.log('Response data:', data)
+      
+      if (data.data) {
+        console.log('Department updated successfully, updating list')
+        setDepartments(departments.map(dept => 
+          dept.id === editingId ? data.data : dept
+        ))
+        setFormData({ name: '', campus_id: '' })
+        setShowForm(false)
+        setIsEditing(false)
+        setEditingId(null)
+        showToast.success('Department Updated', 'Department has been updated successfully!')
+      } else {
+        console.log('Error updating department:', data.error)
+        showToast.error('Update Failed', data.error || 'Failed to update department')
+      }
+    } catch (error) {
+      console.error('Failed to update department:', error)
+      showToast.error('Update Failed', 'Failed to update department')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+
+  const handleCancel = () => {
+    setFormData({ name: '', campus_id: '' })
+    setShowForm(false)
+    setIsEditing(false)
+    setEditingId(null)
   }
 
   if (isLoading) {
@@ -116,13 +226,13 @@ export default function DepartmentsPage() {
         {showForm && (
           <Card>
             <CardHeader>
-              <CardTitle>Add New Department</CardTitle>
+              <CardTitle>{isEditing ? 'Edit Department' : 'Add New Department'}</CardTitle>
               <CardDescription>
-                Create a new academic department
+                {isEditing ? 'Update the department details' : 'Create a new academic department'}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCreateDepartment} className="space-y-4">
+              <form onSubmit={isEditing ? handleUpdateDepartment : handleCreateDepartment} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Department Name</Label>
@@ -154,9 +264,9 @@ export default function DepartmentsPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isCreating}>
-                    {isCreating ? 'Creating...' : 'Create Department'}
+                    {isCreating ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Department' : 'Create Department')}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  <Button type="button" variant="outline" onClick={handleCancel}>
                     Cancel
                   </Button>
                 </div>
@@ -207,11 +317,12 @@ export default function DepartmentsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditDepartment(department)}
+                          >
                             <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -225,6 +336,7 @@ export default function DepartmentsPage() {
           </div>
         </div>
       </div>
+
     </MainLayout>
   )
 }

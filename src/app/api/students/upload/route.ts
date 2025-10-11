@@ -1,124 +1,245 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
-import * as XLSX from 'xlsx'
+// src/app/api/students/upload/route.ts
+import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-export async function POST(request: NextRequest) {
+// Dynamic import to avoid SSR issues
+const XLSX = require('xlsx')
+
+// Create server-side Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabase = createClient(supabaseUrl, supabaseKey)
+
+export async function POST(request: Request) {
+  console.log('=== Upload API called ===')
+  console.log('Supabase URL:', supabaseUrl)
+  console.log('Supabase Key exists:', !!supabaseKey)
+  
   try {
+    console.log('Parsing form data...')
     const formData = await request.formData()
     const file = formData.get('file') as File
+    console.log('File received:', file?.name, file?.size)
 
     if (!file) {
+      console.log('No file provided')
       return NextResponse.json(
-        { error: 'No file uploaded' },
+        { success: false, error: 'No file provided' },
         { status: 400 }
       )
     }
 
-    // Read the Excel file
-    const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const data = XLSX.utils.sheet_to_json(worksheet)
-
-    if (!data || data.length === 0) {
-      return NextResponse.json(
-        { error: 'No data found in the Excel file' },
-        { status: 400 }
-      )
-    }
-
-    // Validate required columns
-    const requiredColumns = ['full_name', 'reg_no', 'department_id', 'batch_id', 'campus_id']
-    const firstRow = data[0] as any
-    const missingColumns = requiredColumns.filter(col => !(col in firstRow))
+    // Read the uploaded file
+    console.log('Reading file...')
+    const arrayBuffer = await file.arrayBuffer()
+    console.log('File read, size:', arrayBuffer.byteLength)
     
-    if (missingColumns.length > 0) {
+    console.log('Parsing Excel...')
+    const workbook = XLSX.read(arrayBuffer)
+    console.log('Workbook sheets:', workbook.SheetNames)
+    
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+    const data = XLSX.utils.sheet_to_json(worksheet)
+    console.log('Data rows found:', data.length)
+
+    if (data.length === 0) {
       return NextResponse.json(
-        { error: `Missing required columns: ${missingColumns.join(', ')}` },
+        { error: 'No data found in the file' },
         { status: 400 }
       )
     }
 
-    // Process each row
-    const students = []
-    const errors = []
+    console.log('First row sample:', data[0])
+    console.log('Fetching departments and batches...')
+    console.log('Supabase client ready:', !!supabase)
+    
+    // Test Supabase connection first
+    try {
+      const testQuery = await supabase.from('departments').select('count', { count: 'exact', head: true })
+      console.log('Supabase connection test:', testQuery.error ? 'FAILED' : 'SUCCESS')
+      if (testQuery.error) {
+        console.error('Connection test error:', testQuery.error)
+      }
+    } catch (testError) {
+      console.error('Connection test exception:', testError)
+    }
+    
+    // Fetch all departments and batches to map names to IDs
+    console.log('Attempting to fetch departments...')
+    const { data: departments, error: deptError } = await supabase
+      .from('departments')
+      .select('id, name, campus_id')
+    
+    console.log('Departments query completed. Error:', deptError, 'Data count:', departments?.length)
+    
+    if (deptError) {
+      console.error('Department fetch error:', deptError)
+      return NextResponse.json(
+        { 
+          success: false,
+          error: `Failed to fetch departments: ${deptError.message}`
+        },
+        { status: 500 }
+      )
+    }
+    
+    const { data: batches, error: batchError } = await supabase
+      .from('batches')
+      .select('id, name')
+    
+    if (batchError) {
+      console.error('Batch fetch error:', batchError)
+      return NextResponse.json(
+        { 
+          success: false,
+          error: `Failed to fetch batches: ${batchError.message}`
+        },
+        { status: 500 }
+      )
+    }
+    
+    console.log('Departments:', departments?.length, 'Batches:', batches?.length)
+    
+    if (!departments || departments.length === 0) {
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'No departments found in the system. Please add departments first.'
+        },
+        { status: 400 }
+      )
+    }
+    
+    if (!batches || batches.length === 0) {
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'No batches found in the system. Please add batches first.'
+        },
+        { status: 400 }
+      )
+    }
 
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i] as any
-      const rowNumber = i + 2 // +2 because Excel is 1-indexed and we skip header
+    // Process and validate data
+    const students: Array<{
+      full_name: string
+      reg_no: string
+      department_id: string
+      batch_id: string
+      campus_id: string
+      email: string | null
+      phone: string | null
+    }> = []
+    const errors: Array<{ row: number; message: string }> = []
 
+    console.log('Processing rows...')
+    
+    data.forEach((row: any, index: number) => {
+      const rowNumber = index + 2 // +2 because of 0-index and header row
+      
       try {
         // Validate required fields
-        if (!row.full_name || !row.reg_no || !row.department_id || !row.batch_id || !row.campus_id) {
-          errors.push(`Row ${rowNumber}: Missing required fields`)
-          continue
+        if (!row['Full Name*']) {
+          throw new Error('Full Name is required')
+        }
+        if (!row['Registration Number*']) {
+          throw new Error('Registration Number is required')
+        }
+        if (!row['Department*']) {
+          throw new Error('Department is required')
+        }
+        if (!row['Batch*']) {
+          throw new Error('Batch is required')
         }
 
-        // Check if student already exists
-        const { data: existingStudent } = await supabase
-          .from('students')
-          .select('id')
-          .eq('reg_no', row.reg_no)
-          .single()
+        // Find department by name (case-insensitive)
+        const departmentName = row['Department*'].toString().trim()
+        const department = departments?.find(
+          d => d.name.toLowerCase() === departmentName.toLowerCase()
+        )
+        
+        if (!department) {
+          throw new Error(`Department "${departmentName}" not found. Please use exact department name.`)
+        }
 
-        if (existingStudent) {
-          errors.push(`Row ${rowNumber}: Student with registration number ${row.reg_no} already exists`)
-          continue
+        // Find batch by name (case-insensitive)
+        const batchName = row['Batch*'].toString().trim()
+        const batch = batches?.find(
+          b => b.name.toLowerCase() === batchName.toLowerCase()
+        )
+        
+        if (!batch) {
+          throw new Error(`Batch "${batchName}" not found. Please use exact batch name.`)
         }
 
         students.push({
-          full_name: row.full_name,
-          reg_no: row.reg_no,
-          department_id: row.department_id,
-          batch_id: row.batch_id,
-          campus_id: row.campus_id,
-          email: row.email || null,
-          phone: row.phone || null
+          full_name: row['Full Name*'].toString().trim(),
+          reg_no: row['Registration Number*'].toString().trim(),
+          department_id: department.id,
+          batch_id: batch.id,
+          campus_id: department.campus_id,
+          email: row['Email'] ? row['Email'].toString().trim() : null,
+          phone: row['Phone'] ? row['Phone'].toString().trim() : null
         })
       } catch (error) {
-        errors.push(`Row ${rowNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        errors.push({
+          row: rowNumber,
+          message: error instanceof Error ? error.message : 'Unknown error'
+        })
       }
-    }
+    })
 
-    if (students.length === 0) {
+    console.log('Valid students:', students.length)
+    console.log('Errors:', errors.length)
+    
+    if (errors.length > 0 && students.length === 0) {
+      console.log('All rows have errors:', errors)
       return NextResponse.json(
-        { error: 'No valid students to import', errors },
+        { 
+          success: false,
+          error: 'All rows have errors. Please check your file.',
+          errors
+        },
         { status: 400 }
       )
     }
 
-    // Insert students in batches
-    const batchSize = 100
-    const results = []
+    // Insert into database
+    console.log('Inserting students into database...')
+    const { data: result, error } = await supabase
+      .from('students')
+      .insert(students)
+      .select()
     
-    for (let i = 0; i < students.length; i += batchSize) {
-      const batch = students.slice(i, i + batchSize)
-      const { data, error } = await supabase
-        .from('students')
-        .insert(batch)
-        .select()
+    console.log('Insert result:', result?.length, 'Error:', error)
 
-      if (error) {
-        errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`)
-      } else {
-        results.push(...(data || []))
+    if (error) {
+      // Check for duplicate registration number
+      if (error.code === '23505') {
+        return NextResponse.json(
+          { 
+            success: false,
+            error: 'One or more registration numbers already exist in the database'
+          },
+          { status: 400 }
+        )
       }
+      throw error
     }
 
+    console.log('=== Upload successful ===')
     return NextResponse.json({
-      data: {
-        imported: results.length,
-        total: students.length,
-        errors: errors.length
-      },
-      message: `Successfully imported ${results.length} students`,
-      errors: errors.length > 0 ? errors : undefined
+      success: true,
+      count: result?.length || 0,
+      students: result,
+      ...(errors.length > 0 && { warnings: errors })
     })
-  } catch (error) {
-    console.error('Student upload error:', error)
+
+  } catch (error: any) {
+    console.error('=== Upload error ===', error)
+    console.error('Error stack:', error.stack)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: false, error: error.message || 'Failed to process upload' },
       { status: 500 }
     )
   }

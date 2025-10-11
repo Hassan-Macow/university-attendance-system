@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Users, Edit, Trash2 } from 'lucide-react'
+import { Plus, Users, Edit } from 'lucide-react'
 import { Batch, Department } from '@/lib/types'
+import { showToast } from '@/components/ui/toast'
 
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([])
@@ -30,13 +31,29 @@ export default function BatchesPage() {
 
   const fetchBatches = async () => {
     try {
-      const response = await fetch('/api/batches')
-      const data = await response.json()
-      if (data.data) {
-        setBatches(data.data)
+      console.log('=== Fetching Batches from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: batches, error } = await supabase
+        .from('batches')
+        .select(`
+          *,
+          departments!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Batches from database:', { data: batches, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch batches from database')
+        return
       }
+
+      setBatches(batches || [])
     } catch (error) {
       console.error('Failed to fetch batches:', error)
+      showToast.error('Error', 'Failed to fetch batches')
     } finally {
       setIsLoading(false)
     }
@@ -44,13 +61,29 @@ export default function BatchesPage() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await fetch('/api/departments')
-      const data = await response.json()
-      if (data.data) {
-        setDepartments(data.data)
+      console.log('=== Fetching Departments from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: departments, error } = await supabase
+        .from('departments')
+        .select(`
+          *,
+          campuses!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Departments from database:', { data: departments, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch departments from database')
+        return
       }
+
+      setDepartments(departments || [])
     } catch (error) {
       console.error('Failed to fetch departments:', error)
+      showToast.error('Error', 'Failed to fetch departments')
     }
   }
 
@@ -59,26 +92,41 @@ export default function BatchesPage() {
     setIsCreating(true)
 
     try {
-      const response = await fetch('/api/batches', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      })
-
-      const data = await response.json()
+      console.log('=== Creating Batch in Database ===')
+      console.log('Form data:', formData)
       
-      if (data.data) {
-        setBatches([data.data, ...batches])
-        setFormData({ name: '', year_level: '', department_id: '', academic_year: '' })
-        setShowForm(false)
-      } else {
-        alert(data.error || 'Failed to create batch')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: batch, error } = await supabase
+        .from('batches')
+        .insert({
+          name: formData.name.trim(),
+          year_level: parseInt(formData.year_level),
+          department_id: formData.department_id,
+          academic_year: formData.academic_year.trim()
+        })
+        .select(`
+          *,
+          departments!inner(*)
+        `)
+        .single()
+
+      console.log('Database response:', { data: batch, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Creation Failed', `Failed to create batch: ${error.message}`)
+        return
       }
+
+      console.log('Batch created successfully, updating list')
+      setBatches([batch, ...batches])
+      setFormData({ name: '', year_level: '', department_id: '', academic_year: '' })
+      setShowForm(false)
+      showToast.success('Batch Created', 'Batch has been created successfully in database!')
     } catch (error) {
       console.error('Failed to create batch:', error)
-      alert('Failed to create batch')
+      showToast.error('Creation Failed', 'Failed to create batch')
     } finally {
       setIsCreating(false)
     }
@@ -238,9 +286,6 @@ export default function BatchesPage() {
                         <div className="flex gap-2 justify-end">
                           <Button variant="outline" size="sm">
                             <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>

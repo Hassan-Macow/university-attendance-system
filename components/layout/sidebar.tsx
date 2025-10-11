@@ -7,7 +7,6 @@ import {
   IconLayoutDashboard,
   IconBuilding,
   IconUsers,
-  IconSchool,
   IconBook,
   IconCalendar,
   IconChartBar,
@@ -37,7 +36,25 @@ const navigationItems = [
     name: 'Dashboard',
     href: '/dashboard',
     icon: IconLayoutDashboard,
-    roles: ['superadmin', 'dean', 'lecturer']
+    roles: ['superadmin']
+  },
+  {
+    name: 'Dean Dashboard',
+    href: '/dean-dashboard',
+    icon: IconLayoutDashboard,
+    roles: ['dean']
+  },
+  {
+    name: 'Lecturer Dashboard',
+    href: '/lecturer-dashboard',
+    icon: IconLayoutDashboard,
+    roles: ['lecturer']
+  },
+  {
+    name: 'Student Dashboard',
+    href: '/student-dashboard',
+    icon: IconLayoutDashboard,
+    roles: ['student']
   },
   {
     name: 'Campuses',
@@ -49,12 +66,6 @@ const navigationItems = [
     name: 'Departments',
     href: '/departments',
     icon: IconBuilding,
-    roles: ['superadmin', 'dean']
-  },
-  {
-    name: 'Lecturers',
-    href: '/lecturers',
-    icon: IconSchool,
     roles: ['superadmin', 'dean']
   },
   {
@@ -79,13 +90,25 @@ const navigationItems = [
     name: 'Schedules',
     href: '/schedules',
     icon: IconCalendar,
-    roles: ['superadmin', 'dean', 'lecturer']
+    roles: ['superadmin', 'dean', 'lecturer', 'student']
   },
   {
     name: 'Take Attendance',
     href: '/attendance',
     icon: IconCheck,
     roles: ['lecturer']
+  },
+  {
+    name: 'My Attendance',
+    href: '/my-attendance',
+    icon: IconCheck,
+    roles: ['student']
+  },
+  {
+    name: 'My Courses',
+    href: '/my-courses',
+    icon: IconBook,
+    roles: ['student']
   },
   {
     name: 'Reports',

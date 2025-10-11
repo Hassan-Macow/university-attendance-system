@@ -7,13 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, MapPin, Edit, Trash2 } from 'lucide-react'
+import { Plus, MapPin, Edit } from 'lucide-react'
 import { Campus } from '@/lib/types'
+import { showToast } from '@/components/ui/toast'
+import { supabase } from '@/lib/supabase'
 
 export default function CampusesPage() {
   const [campuses, setCampuses] = useState<Campus[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -28,13 +32,27 @@ export default function CampusesPage() {
 
   const fetchCampuses = async () => {
     try {
-      const response = await fetch('/api/campuses')
-      const data = await response.json()
-      if (data.data) {
-        setCampuses(data.data)
+      console.log('=== Fetching Campuses from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: campuses, error } = await supabase
+        .from('campuses')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      console.log('Campuses from database:', { data: campuses, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch campuses from database')
+        return
       }
+
+      console.log('Real campuses from database:', campuses)
+      setCampuses(campuses || [])
     } catch (error) {
       console.error('Failed to fetch campuses:', error)
+      showToast.error('Error', 'Failed to fetch campuses')
     } finally {
       setIsLoading(false)
     }
@@ -42,32 +60,150 @@ export default function CampusesPage() {
 
   const handleCreateCampus = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Form validation
+    if (!formData.name.trim()) {
+      showToast.error('Validation Error', 'Please enter a campus name')
+      return
+    }
+    if (!formData.latitude || isNaN(Number(formData.latitude))) {
+      showToast.error('Validation Error', 'Please enter a valid latitude')
+      return
+    }
+    if (!formData.longitude || isNaN(Number(formData.longitude))) {
+      showToast.error('Validation Error', 'Please enter a valid longitude')
+      return
+    }
+    if (!formData.allowed_radius || isNaN(Number(formData.allowed_radius)) || Number(formData.allowed_radius) <= 0) {
+      showToast.error('Validation Error', 'Please enter a valid radius (greater than 0)')
+      return
+    }
+
     setIsCreating(true)
 
     try {
-      const response = await fetch('/api/campuses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      })
-
-      const data = await response.json()
+      console.log('=== Creating Campus in Database ===')
+      console.log('Form data:', formData)
       
-      if (data.data) {
-        setCampuses([data.data, ...campuses])
-        setFormData({ name: '', latitude: '', longitude: '', allowed_radius: '100' })
-        setShowForm(false)
-      } else {
-        alert(data.error || 'Failed to create campus')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: campus, error } = await supabase
+        .from('campuses')
+        .insert({
+          name: formData.name.trim(),
+          latitude: parseFloat(formData.latitude),
+          longitude: parseFloat(formData.longitude),
+          allowed_radius: parseInt(formData.allowed_radius)
+        })
+        .select()
+        .single()
+
+      console.log('Database response:', { data: campus, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Creation Failed', `Failed to create campus: ${error.message}`)
+        return
       }
+
+      console.log('Campus created successfully, updating list')
+      setCampuses([campus, ...campuses])
+      setFormData({ name: '', latitude: '', longitude: '', allowed_radius: '100' })
+      setShowForm(false)
+      showToast.success('Campus Created', 'Campus has been created successfully in database!')
     } catch (error) {
       console.error('Failed to create campus:', error)
-      alert('Failed to create campus')
+      showToast.error('Creation Failed', 'Failed to create campus')
     } finally {
       setIsCreating(false)
     }
+  }
+
+  const handleEditCampus = (campus: Campus) => {
+    setEditingId(campus.id)
+    setIsEditing(true)
+    setFormData({
+      name: campus.name,
+      latitude: campus.latitude.toString(),
+      longitude: campus.longitude.toString(),
+      allowed_radius: campus.allowed_radius.toString()
+    })
+    setShowForm(true)
+  }
+
+  const handleUpdateCampus = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingId) return
+
+    // Form validation
+    if (!formData.name.trim()) {
+      showToast.error('Validation Error', 'Please enter a campus name')
+      return
+    }
+    if (!formData.latitude || isNaN(Number(formData.latitude))) {
+      showToast.error('Validation Error', 'Please enter a valid latitude')
+      return
+    }
+    if (!formData.longitude || isNaN(Number(formData.longitude))) {
+      showToast.error('Validation Error', 'Please enter a valid longitude')
+      return
+    }
+    if (!formData.allowed_radius || isNaN(Number(formData.allowed_radius)) || Number(formData.allowed_radius) <= 0) {
+      showToast.error('Validation Error', 'Please enter a valid radius (greater than 0)')
+      return
+    }
+
+    setIsCreating(true)
+
+    try {
+      console.log('=== Updating Campus in Database ===')
+      console.log('Form data:', formData)
+      console.log('Editing ID:', editingId)
+      
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: campus, error } = await supabase
+        .from('campuses')
+        .update({
+          name: formData.name.trim(),
+          latitude: parseFloat(formData.latitude),
+          longitude: parseFloat(formData.longitude),
+          allowed_radius: parseInt(formData.allowed_radius),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingId)
+        .select()
+        .single()
+
+      console.log('Database response:', { data: campus, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Update Failed', `Failed to update campus: ${error.message}`)
+        return
+      }
+
+      console.log('Campus updated successfully, updating list')
+      setCampuses(campuses.map(c => c.id === editingId ? campus : c))
+      setFormData({ name: '', latitude: '', longitude: '', allowed_radius: '100' })
+      setShowForm(false)
+      setIsEditing(false)
+      setEditingId(null)
+      showToast.success('Campus Updated', 'Campus has been updated successfully in database!')
+    } catch (error) {
+      console.error('Failed to update campus:', error)
+      showToast.error('Update Failed', 'Failed to update campus')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+
+  const handleCancel = () => {
+    setFormData({ name: '', latitude: '', longitude: '', allowed_radius: '100' })
+    setShowForm(false)
+    setIsEditing(false)
+    setEditingId(null)
   }
 
   if (isLoading) {
@@ -104,13 +240,13 @@ export default function CampusesPage() {
         {showForm && (
           <Card>
             <CardHeader>
-              <CardTitle>Add New Campus</CardTitle>
+              <CardTitle>{isEditing ? 'Edit Campus' : 'Add New Campus'}</CardTitle>
               <CardDescription>
-                Enter the campus details including location coordinates
+                {isEditing ? 'Update the campus details' : 'Enter the campus details including location coordinates'}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCreateCampus} className="space-y-4">
+              <form onSubmit={isEditing ? handleUpdateCampus : handleCreateCampus} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Campus Name</Label>
@@ -131,6 +267,8 @@ export default function CampusesPage() {
                       onChange={(e) => setFormData({ ...formData, allowed_radius: e.target.value })}
                       placeholder="100"
                       required
+                      min="1"
+                      max="10000"
                     />
                   </div>
                   <div className="space-y-2">
@@ -141,8 +279,10 @@ export default function CampusesPage() {
                       step="any"
                       value={formData.latitude}
                       onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                      placeholder="e.g., 40.7128"
+                      placeholder="e.g., 12.3456"
                       required
+                      min="-90"
+                      max="90"
                     />
                   </div>
                   <div className="space-y-2">
@@ -153,16 +293,18 @@ export default function CampusesPage() {
                       step="any"
                       value={formData.longitude}
                       onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                      placeholder="e.g., -74.0060"
+                      placeholder="e.g., 78.9012"
                       required
+                      min="-180"
+                      max="180"
                     />
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isCreating}>
-                    {isCreating ? 'Creating...' : 'Create Campus'}
+                    {isCreating ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Campus' : 'Create Campus')}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  <Button type="button" variant="outline" onClick={handleCancel}>
                     Cancel
                   </Button>
                 </div>
@@ -218,11 +360,12 @@ export default function CampusesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditCampus(campus)}
+                          >
                             <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -236,6 +379,7 @@ export default function CampusesPage() {
           </div>
         </div>
       </div>
+
     </MainLayout>
   )
 }

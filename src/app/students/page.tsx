@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, GraduationCap, Edit, Trash2, Upload } from 'lucide-react'
+import { Plus, GraduationCap, Edit, Trash2, Upload, FileSpreadsheet, Download } from 'lucide-react'
 import { Student, Department, Batch } from '@/lib/types'
+import { supabase } from '@/lib/supabase'
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([])
@@ -17,6 +18,15 @@ export default function StudentsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [showBulkUpload, setShowBulkUpload] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadedStudents, setUploadedStudents] = useState<any[]>([])
+  const [showAssignment, setShowAssignment] = useState(false)
+  const [currentStep, setCurrentStep] = useState(1) // 1: Upload, 2: Assign
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState('')
+  const [selectedBatchId, setSelectedBatchId] = useState('')
   const [formData, setFormData] = useState({
     full_name: '',
     reg_no: '',
@@ -34,11 +44,22 @@ export default function StudentsPage() {
 
   const fetchStudents = async () => {
     try {
-      const response = await fetch('/api/students')
-      const data = await response.json()
-      if (data.data) {
-        setStudents(data.data)
+      const { data, error } = await supabase
+        .from('students')
+        .select(`
+          *,
+          departments!inner(*),
+          batches!inner(*),
+          campuses!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Failed to fetch students:', error)
+        return
       }
+
+      setStudents(data || [])
     } catch (error) {
       console.error('Failed to fetch students:', error)
     } finally {
@@ -48,11 +69,17 @@ export default function StudentsPage() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await fetch('/api/departments')
-      const data = await response.json()
-      if (data.data) {
-        setDepartments(data.data)
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .order('name', { ascending: true })
+
+      if (error) {
+        console.error('Failed to fetch departments:', error)
+        return
       }
+
+      setDepartments(data || [])
     } catch (error) {
       console.error('Failed to fetch departments:', error)
     }
@@ -60,11 +87,17 @@ export default function StudentsPage() {
 
   const fetchBatches = async () => {
     try {
-      const response = await fetch('/api/batches')
-      const data = await response.json()
-      if (data.data) {
-        setBatches(data.data)
+      const { data, error } = await supabase
+        .from('batches')
+        .select('*')
+        .order('name', { ascending: true })
+
+      if (error) {
+        console.error('Failed to fetch batches:', error)
+        return
       }
+
+      setBatches(data || [])
     } catch (error) {
       console.error('Failed to fetch batches:', error)
     }
@@ -82,25 +115,38 @@ export default function StudentsPage() {
         return
       }
 
-      const response = await fetch('/api/students', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          campus_id: selectedDepartment.campus_id
-        }),
-      })
+      const { data, error } = await supabase
+        .from('students')
+        .insert([{
+          full_name: formData.full_name,
+          reg_no: formData.reg_no,
+          department_id: formData.department_id,
+          batch_id: formData.batch_id,
+          campus_id: selectedDepartment.campus_id,
+          email: formData.email || null,
+          phone: formData.phone || null
+        }])
+        .select(`
+          *,
+          departments!inner(*),
+          batches!inner(*),
+          campuses!inner(*)
+        `)
 
-      const data = await response.json()
-      
-      if (data.data) {
-        setStudents([data.data, ...students])
+      if (error) {
+        if (error.code === '23505') {
+          alert('Student with this registration number already exists')
+        } else {
+          alert(`Failed to create student: ${error.message}`)
+        }
+        return
+      }
+
+      if (data && data[0]) {
+        setStudents([data[0], ...students])
         setFormData({ full_name: '', reg_no: '', department_id: '', batch_id: '', email: '', phone: '' })
         setShowForm(false)
-      } else {
-        alert(data.error || 'Failed to create student')
+        alert('Student created successfully!')
       }
     } catch (error) {
       console.error('Failed to create student:', error)
@@ -123,6 +169,150 @@ export default function StudentsPage() {
     )
   }
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+          file.type === 'application/vnd.ms-excel' ||
+          file.type === 'text/csv' ||
+          file.name.endsWith('.xlsx') || 
+          file.name.endsWith('.xls') ||
+          file.name.endsWith('.csv')) {
+        setUploadFile(file)
+      } else {
+        alert('Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file')
+      }
+    }
+  }
+
+  const downloadTemplate = async () => {
+    try {
+      const response = await fetch('/api/students/template')
+      if (!response.ok) throw new Error('Failed to download template')
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'students_upload_template.xlsx'
+      document.body.appendChild(link)
+      link.click()
+      window.URL.revokeObjectURL(url)
+      link.remove()
+      
+      alert('Template downloaded successfully!')
+    } catch (error) {
+      console.error('Error downloading template:', error)
+      alert('Failed to download template')
+    }
+  }
+
+  const handleBulkUpload = async () => {
+    if (!uploadFile) {
+      alert('Please select a file to upload')
+      return
+    }
+
+    setIsUploading(true)
+    setUploadProgress(0)
+
+    try {
+      console.log('Starting upload...', uploadFile.name)
+      const formData = new FormData()
+      formData.append('file', uploadFile)
+      console.log('FormData created')
+
+      console.log('Fetching /api/students/upload...')
+      const response = await fetch('/api/students/upload', {
+        method: 'POST',
+        body: formData
+      })
+      console.log('Response received:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Response error:', errorText)
+        throw new Error(`Server error: ${response.status} - ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log('Result:', result)
+
+      if (result.success) {
+        alert(`Successfully uploaded ${result.count} students!`)
+        setShowBulkUpload(false)
+        setUploadFile(null)
+        fetchStudents() // Refresh the list
+      } else {
+        alert(`Upload failed: ${result.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      alert(`Upload failed: ${error instanceof Error ? error.message : 'Please try again'}`)
+    } finally {
+      setIsUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
+  const handleAssignDepartments = async () => {
+    if (!selectedDepartmentId || !selectedBatchId) {
+      alert('Please select both department and batch for all students')
+      return
+    }
+
+    console.log('=== Starting Bulk Create ===')
+    console.log('Selected Department ID:', selectedDepartmentId)
+    console.log('Selected Batch ID:', selectedBatchId)
+    console.log('Number of students:', uploadedStudents.length)
+
+    setIsUploading(true)
+
+    try {
+      // Apply the selected department and batch to all students
+      const studentsWithAssignment = uploadedStudents.map(student => ({
+        ...student,
+        department_id: selectedDepartmentId,
+        batch_id: selectedBatchId
+      }))
+
+      console.log('Students with assignment:', studentsWithAssignment)
+
+      const response = await fetch('/api/students/bulk-create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          students: studentsWithAssignment
+        }),
+      })
+
+      console.log('Response status:', response.status)
+      const result = await response.json()
+      console.log('Response result:', result)
+
+      if (result.success) {
+        alert(`Successfully created ${result.imported} students!`)
+        setShowBulkUpload(false)
+        setShowAssignment(false)
+        setUploadedStudents([])
+        setCurrentStep(1)
+        setUploadFile(null)
+        setSelectedDepartmentId('')
+        setSelectedBatchId('')
+        fetchStudents() // Refresh the list
+      } else {
+        alert(`Creation failed: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Creation error:', error)
+      alert(`Failed to create students: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   return (
     <MainLayout>
       <div className="min-h-screen bg-background">
@@ -136,9 +326,13 @@ export default function StudentsPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setShowBulkUpload(true)}>
               <Upload className="h-4 w-4 mr-2" />
-              Upload Excel
+              Bulk Upload
+            </Button>
+            <Button variant="outline" onClick={downloadTemplate}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Template
             </Button>
             <Button onClick={() => setShowForm(!showForm)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -241,6 +435,193 @@ export default function StudentsPage() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bulk Upload Form */}
+        {showBulkUpload && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5" />
+                Bulk Upload Students
+              </CardTitle>
+              <CardDescription>
+                Upload multiple students using an Excel file
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="file-upload" className="text-sm font-medium mb-2 block">
+                    Select Excel or CSV File
+                  </Label>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleFileUpload}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  />
+                  {uploadFile && (
+                    <p className="text-sm text-green-600 mt-2">
+                      Selected: {uploadFile.name}
+                    </p>
+                  )}
+                </div>
+
+                <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">How to Upload:</h4>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-start space-x-2">
+                      <span className="text-blue-600 font-bold">1.</span>
+                      <p>Click "Download Template" to get the Excel file</p>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <span className="text-blue-600 font-bold">2.</span>
+                      <p>Fill in all required fields (marked with *)</p>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <span className="text-blue-600 font-bold">3.</span>
+                      <p>Save the file and upload it here</p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950 rounded border-l-4 border-amber-400">
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      <strong>Important:</strong> Make sure to get the correct Department ID, Batch ID, and Campus ID from your system before filling the template.
+                    </p>
+                  </div>
+                </div>
+
+                {isUploading && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Uploading...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleBulkUpload} 
+                    disabled={!uploadFile || isUploading}
+                  >
+                    {isUploading ? 'Uploading...' : 'Upload Students'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowBulkUpload(false)}
+                    disabled={isUploading}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 2: Assignment Form */}
+        {showAssignment && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                Assign Department & Batch for All Students
+              </CardTitle>
+              <CardDescription>
+                Select one department and one batch that will apply to all {uploadedStudents.length} students
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Single Selection for All Students */}
+                <div className="p-6 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block">Department for All Students *</Label>
+                      <select
+                        value={selectedDepartmentId}
+                        onChange={(e) => setSelectedDepartmentId(e.target.value)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                      >
+                        <option value="">Select Department</option>
+                        {departments.map(dept => (
+                          <option key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block">Batch for All Students *</Label>
+                      <select
+                        value={selectedBatchId}
+                        onChange={(e) => setSelectedBatchId(e.target.value)}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                      >
+                        <option value="">Select Batch</option>
+                        {batches.map(batch => (
+                          <option key={batch.id} value={batch.id}>
+                            {batch.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview of Students */}
+                <div>
+                  <h4 className="font-medium mb-3">Students to be created ({uploadedStudents.length}):</h4>
+                  <div className="max-h-60 overflow-y-auto border rounded-lg">
+                    {uploadedStudents.map((student, index) => (
+                      <div key={index} className="p-3 border-b last:border-b-0 flex justify-between items-center">
+                        <div>
+                          <span className="font-medium">{student.full_name}</span>
+                          <span className="text-muted-foreground ml-2">({student.reg_no})</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {selectedDepartmentId ? departments.find(d => d.id === selectedDepartmentId)?.name : 'No department'} • 
+                          {selectedBatchId ? batches.find(b => b.id === selectedBatchId)?.name : 'No batch'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button 
+                    onClick={handleAssignDepartments}
+                    disabled={isUploading || !selectedDepartmentId || !selectedBatchId}
+                  >
+                    {isUploading ? 'Creating Students...' : `Create ${uploadedStudents.length} Students`}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setShowAssignment(false)
+                      setCurrentStep(1)
+                      setUploadedStudents([])
+                      setSelectedDepartmentId('')
+                      setSelectedBatchId('')
+                    }}
+                    disabled={isUploading}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

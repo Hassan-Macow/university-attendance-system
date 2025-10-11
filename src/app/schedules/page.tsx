@@ -6,54 +6,165 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Calendar, Clock, MapPin, User, BookOpen } from 'lucide-react'
+import { showToast } from '@/components/ui/toast'
 
 export default function SchedulesPage() {
   const [schedules, setSchedules] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [courses, setCourses] = useState<any[]>([])
+  const [lecturers, setLecturers] = useState<any[]>([])
+  const [campuses, setCampuses] = useState<any[]>([])
+  const [formData, setFormData] = useState({
+    course_id: '',
+    lecturer_id: '',
+    campus_id: '',
+    schedule_time: '',
+    duration_minutes: 60,
+    room: ''
+  })
 
   useEffect(() => {
     fetchSchedules()
+    fetchCourses()
+    fetchLecturers()
+    fetchCampuses()
   }, [])
 
   const fetchSchedules = async () => {
     try {
-      // Mock data for now
-      setSchedules([
-        {
-          id: '1',
-          course_name: 'Data Structures and Algorithms',
-          course_code: 'CS201',
-          lecturer_name: 'Dr. John Smith',
-          campus_name: 'Main Campus',
-          room: 'A101',
-          schedule_time: '2024-01-15T09:00:00Z',
-          duration_minutes: 60
-        },
-        {
-          id: '2',
-          course_name: 'Database Management Systems',
-          course_code: 'CS202',
-          lecturer_name: 'Dr. Jane Doe',
-          campus_name: 'Main Campus',
-          room: 'A102',
-          schedule_time: '2024-01-15T11:00:00Z',
-          duration_minutes: 90
-        },
-        {
-          id: '3',
-          course_name: 'Computer Networks',
-          course_code: 'CS203',
-          lecturer_name: 'Dr. Bob Johnson',
-          campus_name: 'North Campus',
-          room: 'B201',
-          schedule_time: '2024-01-15T14:00:00Z',
-          duration_minutes: 60
-        }
-      ])
+      console.log('=== Fetching Class Schedules from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: schedules, error } = await supabase
+        .from('class_sessions')
+        .select(`
+          *,
+          courses!inner(
+            *,
+            departments!inner(*),
+            lecturers!inner(
+              *,
+              users!inner(*)
+            )
+          ),
+          campuses!inner(*)
+        `)
+        .order('schedule_time', { ascending: true })
+
+      console.log('Class sessions from database:', { data: schedules, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch class schedules from database')
+        return
+      }
+
+      // Transform the data to match the expected format
+      const transformedSchedules = schedules?.map(session => ({
+        id: session.id,
+        course_name: session.courses?.name || 'Unknown Course',
+        course_code: session.courses?.code || 'N/A',
+        lecturer_name: session.courses?.lecturers?.users?.name || 'Unknown Lecturer',
+        campus_name: session.campuses?.name || 'Unknown Campus',
+        room: session.room || 'TBD',
+        schedule_time: session.schedule_time,
+        duration_minutes: session.duration_minutes || 60,
+        department_name: session.courses?.departments?.name || 'Unknown Department'
+      })) || []
+
+      setSchedules(transformedSchedules)
     } catch (error) {
-      console.error('Failed to fetch schedules:', error)
+      console.error('Error fetching schedules:', error)
+      showToast.error('Error', 'Failed to fetch class schedules')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchCourses = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      const { data, error } = await supabase
+        .from('courses')
+        .select('id, name, code')
+        .order('name')
+      
+      if (error) throw error
+      setCourses(data || [])
+    } catch (error) {
+      console.error('Error fetching courses:', error)
+    }
+  }
+
+  const fetchLecturers = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      const { data, error } = await supabase
+        .from('lecturers')
+        .select(`
+          id,
+          users!inner(name, email)
+        `)
+        .order('users(name)')
+      
+      if (error) throw error
+      setLecturers(data || [])
+    } catch (error) {
+      console.error('Error fetching lecturers:', error)
+    }
+  }
+
+  const fetchCampuses = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      const { data, error } = await supabase
+        .from('campuses')
+        .select('id, name')
+        .order('name')
+      
+      if (error) throw error
+      setCampuses(data || [])
+    } catch (error) {
+      console.error('Error fetching campuses:', error)
+    }
+  }
+
+  const handleCreateSchedule = async () => {
+    try {
+      if (!formData.course_id || !formData.lecturer_id || !formData.campus_id || !formData.schedule_time) {
+        showToast.error('Validation Error', 'Please fill in all required fields')
+        return
+      }
+
+      const { supabase } = await import('@/lib/supabase')
+      const { error } = await supabase
+        .from('class_sessions')
+        .insert([{
+          course_id: formData.course_id,
+          lecturer_id: formData.lecturer_id,
+          campus_id: formData.campus_id,
+          schedule_time: formData.schedule_time,
+          duration_minutes: formData.duration_minutes,
+          room: formData.room || null
+        }])
+
+      if (error) throw error
+
+      showToast.success('Success', 'Class schedule created successfully!')
+      setShowCreateForm(false)
+      setFormData({
+        course_id: '',
+        lecturer_id: '',
+        campus_id: '',
+        schedule_time: '',
+        duration_minutes: 60,
+        room: ''
+      })
+      fetchSchedules()
+    } catch (error) {
+      console.error('Error creating schedule:', error)
+      showToast.error('Error', 'Failed to create class schedule')
     }
   }
 
@@ -106,6 +217,10 @@ export default function SchedulesPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button onClick={() => setShowCreateForm(true)}>
+              <Calendar className="h-4 w-4 mr-2" />
+              Schedule Class
+            </Button>
             <Button variant="outline">
               <Calendar className="h-4 w-4 mr-2" />
               Today
@@ -116,6 +231,111 @@ export default function SchedulesPage() {
             </Button>
           </div>
         </div>
+
+        {/* Create Schedule Form */}
+        {showCreateForm && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Schedule New Class</CardTitle>
+              <CardDescription>
+                Create a new class schedule
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Course *</label>
+                  <select
+                    value={formData.course_id}
+                    onChange={(e) => setFormData({...formData, course_id: e.target.value})}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  >
+                    <option value="">Select a course</option>
+                    {courses.map(course => (
+                      <option key={course.id} value={course.id}>
+                        {course.name} ({course.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Lecturer *</label>
+                  <select
+                    value={formData.lecturer_id}
+                    onChange={(e) => setFormData({...formData, lecturer_id: e.target.value})}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  >
+                    <option value="">Select a lecturer</option>
+                    {lecturers.map(lecturer => (
+                      <option key={lecturer.id} value={lecturer.id}>
+                        {lecturer.users?.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Campus *</label>
+                  <select
+                    value={formData.campus_id}
+                    onChange={(e) => setFormData({...formData, campus_id: e.target.value})}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  >
+                    <option value="">Select a campus</option>
+                    {campuses.map(campus => (
+                      <option key={campus.id} value={campus.id}>
+                        {campus.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Schedule Time *</label>
+                  <input
+                    type="datetime-local"
+                    value={formData.schedule_time}
+                    onChange={(e) => setFormData({...formData, schedule_time: e.target.value})}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    value={formData.duration_minutes}
+                    onChange={(e) => setFormData({...formData, duration_minutes: parseInt(e.target.value) || 60})}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                    min="30"
+                    max="180"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Room</label>
+                  <input
+                    type="text"
+                    value={formData.room}
+                    onChange={(e) => setFormData({...formData, room: e.target.value})}
+                    placeholder="e.g., Room 101, Lab A"
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <Button onClick={handleCreateSchedule}>
+                  Create Schedule
+                </Button>
+                <Button variant="outline" onClick={() => setShowCreateForm(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

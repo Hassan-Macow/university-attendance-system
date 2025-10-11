@@ -46,9 +46,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-
-  // Chart data
-  const attendanceData = [
+  const [attendanceData, setAttendanceData] = useState([
     { name: 'Mon', attendance: 85, students: 1200 },
     { name: 'Tue', attendance: 87, students: 1250 },
     { name: 'Wed', attendance: 82, students: 1180 },
@@ -56,33 +54,71 @@ export default function DashboardPage() {
     { name: 'Fri', attendance: 91, students: 1350 },
     { name: 'Sat', attendance: 78, students: 1100 },
     { name: 'Sun', attendance: 65, students: 900 }
-  ]
-
-  const departmentData = [
+  ])
+  const [departmentData, setDepartmentData] = useState([
     { name: 'Computer Science', students: 450, color: '#8884d8' },
     { name: 'Engineering', students: 320, color: '#82ca9d' },
     { name: 'Business', students: 280, color: '#ffc658' },
     { name: 'Medicine', students: 200, color: '#ff7300' }
-  ]
+  ])
 
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    setUser(currentUser)
+    const loadDashboardData = async () => {
+      try {
+        // Load user
+        const currentUser = await getCurrentUser()
+        setUser(currentUser)
+
+        // Load dashboard stats and chart data in parallel
+        const [statsResponse, attendanceResponse, departmentResponse] = await Promise.all([
+          fetch('/api/dashboard-stats'),
+          fetch('/api/attendance-trend'),
+          fetch('/api/department-distribution')
+        ])
+
+        const [statsData, attendanceData, departmentData] = await Promise.all([
+          statsResponse.json(),
+          attendanceResponse.json(),
+          departmentResponse.json()
+        ])
+        
+        if (statsData.success) {
+          setStats(statsData.data)
+        } else {
+          console.error('Failed to load dashboard stats:', statsData.error)
+        }
+
+        if (attendanceData.success) {
+          setAttendanceData(attendanceData.data)
+        } else {
+          console.error('Failed to load attendance data:', attendanceData.error)
+        }
+
+        if (departmentData.success) {
+          setDepartmentData(departmentData.data)
+        } else {
+          console.error('Failed to load department data:', departmentData.error)
+        }
+      } catch (error) {
+        console.error('Error loading dashboard data:', error)
+        // Fallback to demo data
+        setStats({
+          total_students: 1250,
+          total_lecturers: 85,
+          total_courses: 156,
+          total_departments: 12,
+          total_campuses: 3,
+          attendance_rate_today: 87.5,
+          attendance_rate_week: 82.3,
+          attendance_rate_month: 85.1
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
     
-    // Demo data - works without database
-    setStats({
-      total_students: 1250,
-      total_lecturers: 85,
-      total_courses: 156,
-      total_departments: 12,
-      total_campuses: 3,
-      attendance_rate_today: 87.5,
-      attendance_rate_week: 82.3,
-      attendance_rate_month: 85.1
-    })
-    
-    setIsLoading(false)
+    loadDashboardData()
   }, [])
 
   if (isLoading) {
@@ -104,7 +140,7 @@ export default function DashboardPage() {
       value: stats?.total_students || 0,
       icon: IconUsers,
       description: 'Enrolled students',
-      change: '+12%',
+      change: stats?.students_change || '+12%',
       changeType: 'positive' as const,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50 dark:bg-blue-950',
@@ -115,7 +151,7 @@ export default function DashboardPage() {
       value: stats?.total_lecturers || 0,
       icon: IconSchool,
       description: 'Active lecturers',
-      change: '+5%',
+      change: stats?.lecturers_change || '+5%',
       changeType: 'positive' as const,
       color: 'text-green-600',
       bgColor: 'bg-green-50 dark:bg-green-950',
@@ -126,7 +162,7 @@ export default function DashboardPage() {
       value: stats?.total_courses || 0,
       icon: IconBook,
       description: 'Active courses',
-      change: '+8%',
+      change: stats?.courses_change || '+8%',
       changeType: 'positive' as const,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50 dark:bg-purple-950',
@@ -137,7 +173,7 @@ export default function DashboardPage() {
       value: stats?.total_departments || 0,
       icon: IconBuilding,
       description: 'Active departments',
-      change: '+2%',
+      change: stats?.departments_change || '+2%',
       changeType: 'positive' as const,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50 dark:bg-orange-950',
@@ -151,7 +187,7 @@ export default function DashboardPage() {
       value: `${stats?.attendance_rate_today || 0}%`,
       icon: IconTarget,
       description: 'Current day attendance rate',
-      change: '+3.2%',
+      change: stats?.attendance_today_change || '+3.2%',
       changeType: 'positive' as const,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50 dark:bg-emerald-950',
@@ -162,7 +198,7 @@ export default function DashboardPage() {
       value: `${stats?.attendance_rate_week || 0}%`,
       icon: IconTrendingUp,
       description: 'Weekly attendance rate',
-      change: '+1.8%',
+      change: stats?.attendance_week_change || '+1.8%',
       changeType: 'positive' as const,
       color: 'text-cyan-600',
       bgColor: 'bg-cyan-50 dark:bg-cyan-950',
@@ -173,7 +209,7 @@ export default function DashboardPage() {
       value: `${stats?.attendance_rate_month || 0}%`,
       icon: IconTrophy,
       description: 'Monthly attendance rate',
-      change: '+2.5%',
+      change: stats?.attendance_month_change || '+2.5%',
       changeType: 'positive' as const,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50 dark:bg-amber-950',

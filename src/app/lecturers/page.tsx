@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, User, Edit, Trash2, Mail, Phone } from 'lucide-react'
+import { Plus, User, Edit, Mail } from 'lucide-react'
 import { Lecturer, Department } from '@/lib/types'
+import { showToast } from '@/components/ui/toast'
 
 export default function LecturersPage() {
   const [lecturers, setLecturers] = useState<Lecturer[]>([])
@@ -20,8 +21,7 @@ export default function LecturersPage() {
     name: '',
     email: '',
     department_id: '',
-    employee_id: '',
-    phone: ''
+    employee_id: ''
   })
 
   useEffect(() => {
@@ -31,11 +31,26 @@ export default function LecturersPage() {
 
   const fetchLecturers = async () => {
     try {
-      const response = await fetch('/api/lecturers')
-      const data = await response.json()
-      if (data.data) {
-        setLecturers(data.data)
+      console.log('=== Fetching Lecturers from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: lecturers, error } = await supabase
+        .from('lecturers')
+        .select(`
+          *,
+          users!inner(*),
+          departments!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Lecturers from database:', { data: lecturers, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        return
       }
+
+      setLecturers(lecturers || [])
     } catch (error) {
       console.error('Failed to fetch lecturers:', error)
     } finally {
@@ -45,11 +60,25 @@ export default function LecturersPage() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await fetch('/api/departments')
-      const data = await response.json()
-      if (data.data) {
-        setDepartments(data.data)
+      console.log('=== Fetching Departments from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: departments, error } = await supabase
+        .from('departments')
+        .select(`
+          *,
+          campuses!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Departments from database:', { data: departments, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        return
       }
+
+      setDepartments(departments || [])
     } catch (error) {
       console.error('Failed to fetch departments:', error)
     }
@@ -60,29 +89,61 @@ export default function LecturersPage() {
     setIsCreating(true)
 
     try {
-      const response = await fetch('/api/lecturers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          password: 'defaultPassword123' // In a real app, this would be generated or set by admin
-        }),
-      })
-
-      const data = await response.json()
+      console.log('=== Creating Lecturer in Database ===')
+      console.log('Form data:', formData)
       
-      if (data.data) {
-        setLecturers([data.data, ...lecturers])
-        setFormData({ name: '', email: '', department_id: '', employee_id: '', phone: '' })
-        setShowForm(false)
-      } else {
-        alert(data.error || 'Failed to create lecturer')
+      const { supabase } = await import('@/lib/supabase')
+      
+      // First create the user
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .insert({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          role: 'lecturer'
+        })
+        .select()
+        .single()
+
+      if (userError) {
+        console.error('User creation error:', userError)
+        showToast.error('Creation Failed', `Failed to create user: ${userError.message}`)
+        return
       }
+
+      console.log('User created:', user)
+
+      // Then create the lecturer record
+      const { data: lecturer, error: lecturerError } = await supabase
+        .from('lecturers')
+        .insert({
+          user_id: user.id,
+          department_id: formData.department_id,
+          employee_id: formData.employee_id.trim()
+        })
+        .select(`
+          *,
+          users!inner(*),
+          departments!inner(*)
+        `)
+        .single()
+
+      console.log('Lecturer creation response:', { data: lecturer, error: lecturerError })
+
+      if (lecturerError) {
+        console.error('Lecturer creation error:', lecturerError)
+        showToast.error('Creation Failed', `Failed to create lecturer: ${lecturerError.message}`)
+        return
+      }
+
+      console.log('Lecturer created successfully, updating list')
+      setLecturers([lecturer, ...lecturers])
+      setFormData({ name: '', email: '', department_id: '', employee_id: '' })
+      setShowForm(false)
+      showToast.success('Lecturer Created', 'Lecturer has been created successfully in database!')
     } catch (error) {
       console.error('Failed to create lecturer:', error)
-      alert('Failed to create lecturer')
+      showToast.error('Creation Failed', 'Failed to create lecturer')
     } finally {
       setIsCreating(false)
     }
@@ -178,15 +239,6 @@ export default function LecturersPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone (Optional)</Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="+1234567890"
-                    />
-                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isCreating}>
@@ -248,7 +300,7 @@ export default function LecturersPage() {
                           N/A
                         </div>
                       </TableCell>
-                      <TableCell>{lecturer.employee_id}</TableCell>
+                      <TableCell>{lecturer.employee_id || 'N/A'}</TableCell>
                       <TableCell>
                         {departments.find(dept => dept.id === lecturer.department_id)?.name || 'N/A'}
                       </TableCell>
@@ -259,9 +311,6 @@ export default function LecturersPage() {
                         <div className="flex gap-2 justify-end">
                           <Button variant="outline" size="sm">
                             <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>

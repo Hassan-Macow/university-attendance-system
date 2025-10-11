@@ -7,13 +7,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, BookOpen, Edit, Trash2 } from 'lucide-react'
+import { Plus, BookOpen, Edit } from 'lucide-react'
 import { Course, Department, Batch } from '@/lib/types'
+import { showToast } from '@/components/ui/toast'
 
 export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [batches, setBatches] = useState<Batch[]>([])
+  const [lecturers, setLecturers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -22,6 +24,7 @@ export default function CoursesPage() {
     code: '',
     department_id: '',
     batch_id: '',
+    lecturer_id: '',
     credits: '3'
   })
 
@@ -29,17 +32,39 @@ export default function CoursesPage() {
     fetchCourses()
     fetchDepartments()
     fetchBatches()
+    fetchLecturers()
   }, [])
 
   const fetchCourses = async () => {
     try {
-      const response = await fetch('/api/courses')
-      const data = await response.json()
-      if (data.data) {
-        setCourses(data.data)
+      console.log('=== Fetching Courses from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: courses, error } = await supabase
+        .from('courses')
+        .select(`
+          *,
+          departments!inner(*),
+          batches!inner(*),
+          lecturers!inner(
+            *,
+            users!inner(*)
+          )
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Courses from database:', { data: courses, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch courses from database')
+        return
       }
+
+      setCourses(courses || [])
     } catch (error) {
       console.error('Failed to fetch courses:', error)
+      showToast.error('Error', 'Failed to fetch courses')
     } finally {
       setIsLoading(false)
     }
@@ -47,25 +72,106 @@ export default function CoursesPage() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await fetch('/api/departments')
-      const data = await response.json()
-      if (data.data) {
-        setDepartments(data.data)
+      console.log('=== Fetching Departments from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: departments, error } = await supabase
+        .from('departments')
+        .select(`
+          *,
+          campuses!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Departments from database:', { data: departments, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch departments from database')
+        return
       }
+
+      setDepartments(departments || [])
     } catch (error) {
       console.error('Failed to fetch departments:', error)
+      showToast.error('Error', 'Failed to fetch departments')
     }
   }
 
   const fetchBatches = async () => {
     try {
-      const response = await fetch('/api/batches')
-      const data = await response.json()
-      if (data.data) {
-        setBatches(data.data)
+      console.log('=== Fetching Batches from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: batches, error } = await supabase
+        .from('batches')
+        .select(`
+          *,
+          departments!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Batches from database:', { data: batches, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch batches from database')
+        return
       }
+
+      setBatches(batches || [])
     } catch (error) {
       console.error('Failed to fetch batches:', error)
+      showToast.error('Error', 'Failed to fetch batches')
+    }
+  }
+
+  const fetchLecturers = async () => {
+    try {
+      console.log('=== Fetching Lecturers with Multi-Campus Support ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      // First try to use the view if it exists
+      const { data: lecturers, error } = await supabase
+        .from('lecturers_with_campuses')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.log('View not available, falling back to basic query')
+        // Fallback to basic query if view doesn't exist
+        const { data: basicLecturers, error: basicError } = await supabase
+          .from('users')
+          .select(`
+            *,
+            campuses!inner(*),
+            departments(*)
+          `)
+          .eq('role', 'lecturer')
+          .order('created_at', { ascending: false })
+
+        if (basicError) {
+          console.error('Database error:', basicError)
+          showToast.error('Error', 'Failed to fetch lecturers from database')
+          return
+        }
+
+        setLecturers(basicLecturers || [])
+        return
+      }
+
+      console.log('Lecturers with campuses:', { data: lecturers, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch lecturers from database')
+        return
+      }
+
+      setLecturers(lecturers || [])
+    } catch (error) {
+      console.error('Failed to fetch lecturers:', error)
+      showToast.error('Error', 'Failed to fetch lecturers')
     }
   }
 
@@ -74,30 +180,76 @@ export default function CoursesPage() {
     setIsCreating(true)
 
     try {
-      const response = await fetch('/api/courses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          lecturer_id: 'lecturer1', // This would be selected from a dropdown in a real implementation
-          credits: parseInt(formData.credits)
-        }),
-      })
-
-      const data = await response.json()
+      console.log('=== Creating Course in Database ===')
+      console.log('Form data:', formData)
       
-      if (data.data) {
-        setCourses([data.data, ...courses])
-        setFormData({ name: '', code: '', department_id: '', batch_id: '', credits: '3' })
-        setShowForm(false)
+      const { supabase } = await import('@/lib/supabase')
+      
+      // First, check if lecturer exists in lecturers table, if not create it
+      let lecturerRecord = null
+      
+      // Check if lecturer already exists in lecturers table
+      const { data: existingLecturer } = await supabase
+        .from('lecturers')
+        .select('*')
+        .eq('user_id', formData.lecturer_id)
+        .single()
+
+      if (existingLecturer) {
+        lecturerRecord = existingLecturer
       } else {
-        alert(data.error || 'Failed to create course')
+        // Create lecturer record if it doesn't exist
+        const { data: newLecturer, error: lecturerError } = await supabase
+          .from('lecturers')
+          .insert({
+            user_id: formData.lecturer_id,
+            department_id: formData.department_id,
+            employee_id: `EMP${Date.now()}` // Generate a temporary employee ID
+          })
+          .select('*')
+          .single()
+
+        if (lecturerError) {
+          console.error('Error creating lecturer record:', lecturerError)
+          showToast.error('Creation Failed', `Failed to create lecturer record: ${lecturerError.message}`)
+          return
+        }
+        lecturerRecord = newLecturer
       }
+
+      const { data: course, error } = await supabase
+        .from('courses')
+        .insert({
+          name: formData.name.trim(),
+          code: formData.code.trim(),
+          department_id: formData.department_id,
+          batch_id: formData.batch_id,
+          lecturer_id: lecturerRecord.id, // Use the lecturer record ID
+          credits: parseInt(formData.credits)
+        })
+        .select(`
+          *,
+          departments!inner(*),
+          batches!inner(*)
+        `)
+        .single()
+
+      console.log('Database response:', { data: course, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Creation Failed', `Failed to create course: ${error.message}`)
+        return
+      }
+
+      console.log('Course created successfully, updating list')
+      setCourses([course, ...courses])
+      setFormData({ name: '', code: '', department_id: '', batch_id: '', lecturer_id: '', credits: '3' })
+      setShowForm(false)
+      showToast.success('Course Created', 'Course has been created successfully in database!')
     } catch (error) {
       console.error('Failed to create course:', error)
-      alert('Failed to create course')
+      showToast.error('Creation Failed', 'Failed to create course')
     } finally {
       setIsCreating(false)
     }
@@ -200,6 +352,29 @@ export default function CoursesPage() {
                     </select>
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="lecturer_id">Lecturer</Label>
+                    <select
+                      id="lecturer_id"
+                      value={formData.lecturer_id}
+                      onChange={(e) => setFormData({ ...formData, lecturer_id: e.target.value })}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      required
+                    >
+                      <option value="">Select a lecturer</option>
+                      {lecturers.map((lecturer) => (
+                        <option key={lecturer.id} value={lecturer.id}>
+                          {lecturer.name || 'Unknown Lecturer'}
+                          {lecturer.campuses && lecturer.campuses.length > 0 && (
+                            ` (${lecturer.campuses.map((c: any) => c.name).join(', ')})`
+                          )}
+                          {lecturer.primary_campus_name && !lecturer.campuses && (
+                            ` (${lecturer.primary_campus_name})`
+                          )}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="credits">Credits</Label>
                     <Input
                       id="credits"
@@ -271,7 +446,9 @@ export default function CoursesPage() {
                       <TableCell>
                         {batches.find(batch => batch.id === course.batch_id)?.name || 'N/A'}
                       </TableCell>
-                      <TableCell>N/A</TableCell>
+                      <TableCell>
+                        {course.lecturers?.users?.name || 'N/A'}
+                      </TableCell>
                       <TableCell>{course.credits}</TableCell>
                       <TableCell>
                         {new Date(course.created_at).toLocaleDateString()}
@@ -280,9 +457,6 @@ export default function CoursesPage() {
                         <div className="flex gap-2 justify-end">
                           <Button variant="outline" size="sm">
                             <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>

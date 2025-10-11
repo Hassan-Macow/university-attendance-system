@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { AuthUser, getCurrentUser, signOut } from '@/lib/auth'
+import { ToastContainer } from '@/components/ui/toast'
 
 interface MainLayoutProps {
   children: React.ReactNode
@@ -12,12 +14,36 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
-    const currentUser = getCurrentUser()
-    setUser(currentUser)
-    setIsLoading(false)
-  }, [])
+    const loadUser = async () => {
+      const currentUser = await getCurrentUser()
+      setUser(currentUser)
+      setIsLoading(false)
+
+      // Redirect to appropriate dashboard if user is on wrong page
+      if (currentUser && pathname === '/dashboard') {
+        switch (currentUser.role) {
+          case 'dean':
+            router.push('/dean-dashboard')
+            break
+          case 'lecturer':
+            router.push('/lecturer-dashboard')
+            break
+          case 'student':
+            router.push('/student-dashboard')
+            break
+          case 'superadmin':
+            // Superadmin can stay on main dashboard
+            break
+        }
+      }
+    }
+    
+    loadUser()
+  }, [router, pathname])
 
   const handleSignOut = () => {
     signOut()
@@ -62,6 +88,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           {children}
         </main>
       </div>
+      <ToastContainer />
     </div>
   )
 }

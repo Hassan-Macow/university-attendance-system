@@ -1,65 +1,125 @@
-# Supabase Setup Guide
+# 🚀 Supabase Setup Guide
 
-## Quick Setup Steps
+## 📋 **Prerequisites**
+- Supabase account (sign up at [supabase.com](https://supabase.com))
+- Node.js 18+ installed
+- Git repository cloned
 
-### 1. Create Supabase Project
-1. Go to [supabase.com](https://supabase.com)
-2. Sign up/Login to your account
-3. Click "New Project"
-4. Choose your organization
-5. Enter project details:
-   - **Name**: `attendance-management-system`
-   - **Database Password**: Choose a strong password
-   - **Region**: Choose the closest to your location
-6. Click "Create new project"
+## 🔧 **Step 1: Create Supabase Project**
 
-### 2. Get Your Credentials
-1. Once your project is created, go to **Settings** → **API**
-2. Copy the following values:
-   - **Project URL** (looks like: `https://your-project-id.supabase.co`)
-   - **anon public** key (starts with `eyJ...`)
+1. **Go to [Supabase Dashboard](https://app.supabase.com)**
+2. **Click "New Project"**
+3. **Fill in project details:**
+   - Organization: Select or create one
+   - Project Name: `university-attendance-system`
+   - Database Password: Choose a strong password
+   - Region: Select closest to your users
+4. **Click "Create new project"**
+5. **Wait for project to be ready** (2-3 minutes)
 
-### 3. Update Environment Variables
-1. Open `.env.local` file in your project root
-2. Replace the placeholder values:
+## 🔑 **Step 2: Get Your Credentials**
+
+1. **Go to Project Settings** (gear icon in sidebar)
+2. **Click "API" tab**
+3. **Copy these values:**
+   - **Project URL** (starts with `https://`)
+   - **Anon/Public Key** (starts with `eyJ`)
+
+## ⚙️ **Step 3: Configure Environment Variables**
+
+1. **Open `.env.local` file** in your project root
+2. **Replace the placeholder values:**
 
 ```env
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_actual_anon_key_here
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 # JWT Secret for custom authentication
 JWT_SECRET=your_secure_random_string_here
 
 # App Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3003
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-### 4. Set Up Database Schema
-1. In your Supabase dashboard, go to **SQL Editor**
-2. Click "New query"
-3. Copy the entire content from `src/lib/supabase.ts` (the `databaseSchema` constant)
-4. Paste it into the SQL editor
-5. Click "Run" to execute the schema
+## 🗄️ **Step 4: Set Up Database Schema**
 
-### 5. Restart Development Server
-1. Stop the current server (Ctrl+C in terminal)
-2. Run `npm run dev` again
-3. Open http://localhost:3003 in your browser
+1. **Go to SQL Editor** in Supabase Dashboard
+2. **Click "New Query"**
+3. **Copy the entire schema** from `src/lib/supabase.ts` (lines 19-160)
+4. **Paste and run the SQL** to create all tables
 
-## Demo Data (Optional)
-After setting up the database, you can add some demo data using the demo data from `src/lib/demo-data.ts` or start fresh.
+## 🔐 **Step 5: Configure Authentication (Optional)**
 
-## Troubleshooting
-- Make sure your Supabase project is fully created before copying credentials
-- Ensure the database schema ran without errors
-- Check that all environment variables are correctly set
-- Restart the development server after making changes to `.env.local`
+If you want to use Supabase Auth instead of custom authentication:
 
-## Next Steps
-Once Supabase is configured:
-1. Login with demo credentials
-2. Create your first campus
-3. Set up departments and batches
-4. Add lecturers and students
-5. Start taking attendance!
+1. **Go to Authentication > Settings**
+2. **Configure your preferred auth providers**
+3. **Set up email templates**
+4. **Configure redirect URLs**
+
+## 🧪 **Step 6: Test Connection**
+
+1. **Start your development server:**
+   ```bash
+   npm run dev
+   ```
+
+2. **Check browser console** for any Supabase connection errors
+3. **Test database operations** in your app
+
+## 📊 **Step 7: Insert Sample Data (Optional)**
+
+You can add sample data to test your application:
+
+```sql
+-- Insert sample campus
+INSERT INTO campuses (name, latitude, longitude, allowed_radius) 
+VALUES ('Main Campus', 12.3456, 78.9012, 100);
+
+-- Insert sample department
+INSERT INTO departments (name, campus_id) 
+VALUES ('Computer Science', (SELECT id FROM campuses LIMIT 1));
+
+-- Insert sample user
+INSERT INTO users (name, email, password_hash, role, campus_id, department_id) 
+VALUES ('Admin User', 'admin@university.edu', '$2b$10$...', 'superadmin', 
+        (SELECT id FROM campuses LIMIT 1), 
+        (SELECT id FROM departments LIMIT 1));
+```
+
+## 🚨 **Troubleshooting**
+
+### **Common Issues:**
+
+1. **"Missing Supabase environment variables"**
+   - Check `.env.local` file exists
+   - Verify variable names are correct
+   - Restart development server
+
+2. **"Invalid API key"**
+   - Double-check your Supabase URL and key
+   - Ensure no extra spaces or quotes
+
+3. **"Database connection failed"**
+   - Check if your Supabase project is active
+   - Verify database password is correct
+
+4. **"Table doesn't exist"**
+   - Run the database schema SQL in Supabase SQL Editor
+   - Check for any SQL errors
+
+## 🎯 **Next Steps**
+
+Once connected:
+- ✅ Test user authentication
+- ✅ Create sample data
+- ✅ Test attendance tracking
+- ✅ Configure GPS location settings
+- ✅ Set up real-time subscriptions
+
+## 📞 **Need Help?**
+
+- [Supabase Documentation](https://supabase.com/docs)
+- [Supabase Discord Community](https://discord.supabase.com)
+- [GitHub Issues](https://github.com/supabase/supabase/issues)

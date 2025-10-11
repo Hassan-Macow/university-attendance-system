@@ -38,7 +38,24 @@ export default function LoginPage() {
       }
 
       setCurrentUser(user)
-      router.push('/dashboard')
+      
+      // Redirect based on user role
+      switch (user.role) {
+        case 'superadmin':
+          router.push('/dashboard')
+          break
+        case 'dean':
+          router.push('/dean-dashboard')
+          break
+        case 'lecturer':
+          router.push('/lecturer-dashboard')
+          break
+        case 'student':
+          router.push('/student-dashboard')
+          break
+        default:
+          router.push('/dashboard')
+      }
     } catch (err) {
       setError('An unexpected error occurred')
     } finally {
@@ -80,20 +97,23 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Email Address
+                  Email Address or Employee ID
                 </Label>
                 <div className="relative">
                   <EnvelopeIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                   <Input
                     id="email"
-                    type="email"
-                    placeholder="Enter your email"
+                    type="text"
+                    placeholder="Enter your email or employee ID"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-12 h-12 border-2 border-gray-300 dark:border-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  You can login using your email address or employee/student ID
+                </p>
               </div>
               
               <div className="space-y-2">
