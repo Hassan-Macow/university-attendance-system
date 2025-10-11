@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 export async function GET(request: NextRequest) {
   try {
@@ -115,23 +120,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    if (!isSupabaseConfigured) {
-      // Return mock data if Supabase is not configured
-      console.log('Using mock department update')
-      const updatedDepartment = {
-        id,
-        name,
-        campus_id,
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: new Date().toISOString(),
-        campuses: { id: campus_id, name: 'Mock Campus' }
-      }
-      
-      return NextResponse.json({
-        data: updatedDepartment,
-        message: 'Department updated successfully (simulated)'
-      })
-    }
+    // Remove mock data check - always use real Supabase
 
     const { data: department, error } = await supabase
       .from('departments')
@@ -185,13 +174,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    if (!isSupabaseConfigured) {
-      // Return mock success if Supabase is not configured
-      console.log('Using mock department deletion')
-      return NextResponse.json({
-        message: 'Department deleted successfully (simulated)'
-      })
-    }
+    // Remove mock data check - always use real Supabase
 
     const { error } = await supabase
       .from('departments')

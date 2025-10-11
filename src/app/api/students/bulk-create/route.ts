@@ -20,14 +20,14 @@ export async function POST(request: NextRequest) {
         setTimeout(() => reject(new Error('Connection timeout')), 5000)
       )
       
-      const result = await Promise.race([testPromise, timeoutPromise])
+      const result: any = await Promise.race([testPromise, timeoutPromise])
       testData = result.data
       testError = result.error
     } catch (error) {
       console.log('Supabase connection failed:', error)
       return NextResponse.json({ 
         success: false, 
-        error: `Database connection failed: ${error.message}` 
+        error: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
       }, { status: 500 })
     }
     

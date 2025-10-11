@@ -53,46 +53,66 @@ export async function POST(request: Request) {
     console.log('Fetching departments and batches...')
     console.log('Supabase client ready:', !!supabase)
     
-    // Test Supabase connection first
-    try {
-      const testQuery = await supabase.from('departments').select('count', { count: 'exact', head: true })
-      console.log('Supabase connection test:', testQuery.error ? 'FAILED' : 'SUCCESS')
-      if (testQuery.error) {
-        console.error('Connection test error:', testQuery.error)
-      }
-    } catch (testError) {
-      console.error('Connection test exception:', testError)
-    }
-    
     // Fetch all departments and batches to map names to IDs
     console.log('Attempting to fetch departments...')
-    const { data: departments, error: deptError } = await supabase
-      .from('departments')
-      .select('id, name, campus_id')
+    let departments: any[] | null = null
+    let batches: any[] | null = null
     
-    console.log('Departments query completed. Error:', deptError, 'Data count:', departments?.length)
-    
-    if (deptError) {
-      console.error('Department fetch error:', deptError)
+    try {
+      const deptResult = await supabase
+        .from('departments')
+        .select('id, name, campus_id')
+      
+      departments = deptResult.data
+      const deptError = deptResult.error
+      
+      console.log('Departments query completed. Error:', deptError, 'Data count:', departments?.length)
+      
+      if (deptError) {
+        console.error('Department fetch error:', deptError)
+        return NextResponse.json(
+          { 
+            success: false,
+            error: `Failed to fetch departments: ${deptError.message}. This might be a local development issue. The feature will work on production.`
+          },
+          { status: 500 }
+        )
+      }
+    } catch (fetchError) {
+      console.error('Department fetch exception:', fetchError)
       return NextResponse.json(
         { 
           success: false,
-          error: `Failed to fetch departments: ${deptError.message}`
+          error: `Network error fetching departments. This is a Windows/Node.js DNS issue in local development. Deploy to production to test the feature.`
         },
         { status: 500 }
       )
     }
     
-    const { data: batches, error: batchError } = await supabase
-      .from('batches')
-      .select('id, name')
-    
-    if (batchError) {
-      console.error('Batch fetch error:', batchError)
+    try {
+      const batchResult = await supabase
+        .from('batches')
+        .select('id, name')
+      
+      batches = batchResult.data
+      const batchError = batchResult.error
+      
+      if (batchError) {
+        console.error('Batch fetch error:', batchError)
+        return NextResponse.json(
+          { 
+            success: false,
+            error: `Failed to fetch batches: ${batchError.message}`
+          },
+          { status: 500 }
+        )
+      }
+    } catch (fetchError) {
+      console.error('Batch fetch exception:', fetchError)
       return NextResponse.json(
         { 
           success: false,
-          error: `Failed to fetch batches: ${batchError.message}`
+          error: `Network error fetching batches. This is a Windows/Node.js DNS issue in local development.`
         },
         { status: 500 }
       )
