@@ -7,12 +7,8 @@ const nextConfig = {
   experimental: {
     outputFileTracingRoot: undefined,
   },
-  // Make environment variables available at build time
-  env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key',
-  },
-  // Skip static optimization for API routes
+  // Environment variables will be automatically available from Digital Ocean
+  // No need to specify them here - they'll be injected at build time
   typescript: {
     ignoreBuildErrors: false,
   },

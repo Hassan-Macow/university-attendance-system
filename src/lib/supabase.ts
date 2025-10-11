@@ -19,18 +19,19 @@ const supabaseConfig = {
 console.log('Supabase URL:', supabaseUrl || 'NOT SET')
 console.log('Supabase Key exists:', !!supabaseAnonKey)
 
-if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'https://placeholder.supabase.co') {
-  console.warn('Supabase environment variables not found or using placeholder. Using placeholder client.')
-  // Create a placeholder client for build time
-  supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', supabaseConfig)
-} else {
-  try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseConfig)
-    console.log('Supabase client initialized successfully with real credentials')
-  } catch (error) {
-    console.error('Failed to initialize Supabase client:', error)
-    throw new Error('Failed to initialize Supabase client')
-  }
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('CRITICAL: Supabase environment variables are not set!')
+  console.error('Please ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured')
+  // Throw error - don't create placeholder client
+  throw new Error('Missing required Supabase environment variables. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+}
+
+try {
+  supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseConfig)
+  console.log('✅ Supabase client initialized successfully with:', supabaseUrl)
+} catch (error) {
+  console.error('Failed to initialize Supabase client:', error)
+  throw new Error('Failed to initialize Supabase client')
 }
 
 // Export types and client
