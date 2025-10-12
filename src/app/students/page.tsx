@@ -45,15 +45,40 @@ export default function StudentsPage() {
 
   const fetchStudents = async () => {
     try {
-      const { data, error } = await supabase
+      // Get current user to check role
+      const { getCurrentUser } = await import('@/lib/auth')
+      const currentUser = await getCurrentUser()
+
+      let query = supabase
         .from('students')
         .select(`
           *,
           departments!inner(*),
-          batches!inner(*),
+          batches!inner(*, courses!inner(department_id)),
           campuses!inner(*)
         `)
         .order('created_at', { ascending: false })
+
+      // If user is a dean, filter by their department
+      if (currentUser?.role === 'dean') {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('department_id')
+          .eq('id', currentUser.id)
+          .single()
+
+        console.log('🔍 Dean user data:', userData)
+        console.log('🔍 Department ID:', userData?.department_id)
+
+        if (userData?.department_id) {
+          query = query.eq('batches.courses.department_id', userData.department_id)
+          console.log('✅ Applied department filter:', userData.department_id)
+        } else {
+          console.warn('⚠️ Dean has no department_id assigned! Showing all data.')
+        }
+      }
+
+      const { data, error } = await query
 
       if (error) {
         console.error('Failed to fetch students:', error)

@@ -40,7 +40,11 @@ export default function CoursesPage() {
       console.log('=== Fetching Courses from Database ===')
       const { supabase } = await import('@/lib/supabase')
       
-      const { data: courses, error } = await supabase
+      // Get current user to check role
+      const { getCurrentUser } = await import('@/lib/auth')
+      const currentUser = await getCurrentUser()
+
+      let query = supabase
         .from('courses')
         .select(`
           *,
@@ -52,6 +56,21 @@ export default function CoursesPage() {
           )
         `)
         .order('created_at', { ascending: false })
+
+      // If user is a dean, filter by their department
+      if (currentUser?.role === 'dean') {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('department_id')
+          .eq('id', currentUser.id)
+          .single()
+
+        if (userData?.department_id) {
+          query = query.eq('department_id', userData.department_id)
+        }
+      }
+
+      const { data: courses, error } = await query
 
       console.log('Courses from database:', { data: courses, error })
 

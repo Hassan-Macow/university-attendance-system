@@ -44,24 +44,30 @@ import {
   Bar
 } from 'recharts'
 
+interface DashboardStats {
+  totalStudents: number
+  totalLecturers: number
+  totalCourses: number
+  attendanceRate: number
+  todayAttendance: number
+  weekAttendance: number
+  monthAttendance: number
+}
+
 export default function DeanDashboard() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
-  const [attendanceData, setAttendanceData] = useState([
-    { name: 'Mon', attendance: 85, students: 1200 },
-    { name: 'Tue', attendance: 87, students: 1250 },
-    { name: 'Wed', attendance: 82, students: 1180 },
-    { name: 'Thu', attendance: 89, students: 1300 },
-    { name: 'Fri', attendance: 91, students: 1350 },
-    { name: 'Sat', attendance: 78, students: 1100 },
-    { name: 'Sun', attendance: 65, students: 900 }
-  ])
-  const [departmentData, setDepartmentData] = useState([
-    { name: 'Computer Science', students: 450, color: '#8884d8' },
-    { name: 'Engineering', students: 320, color: '#82ca9d' },
-    { name: 'Business', students: 280, color: '#ffc658' },
-    { name: 'Medicine', students: 200, color: '#ff7300' }
-  ])
+  const [stats, setStats] = useState<DashboardStats>({
+    totalStudents: 0,
+    totalLecturers: 0,
+    totalCourses: 0,
+    attendanceRate: 0,
+    todayAttendance: 0,
+    weekAttendance: 0,
+    monthAttendance: 0
+  })
+  const [attendanceData, setAttendanceData] = useState<any[]>([])
+  const [departmentData, setDepartmentData] = useState<any[]>([])
   const router = useRouter()
 
   useEffect(() => {
@@ -78,11 +84,255 @@ export default function DeanDashboard() {
       }
       
       setUser(currentUser)
+      await loadDashboardData()
       setLoading(false)
     }
 
     checkUser()
   }, [router])
+
+  const loadDashboardData = async () => {
+    await Promise.all([
+      fetchStats(),
+      fetchWeeklyAttendance(),
+      fetchDepartmentData()
+    ])
+  }
+
+  const fetchStats = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      
+      // Get dean's department
+      const { data: deanData } = await supabase
+        .from('users')
+        .select('department_id')
+        .eq('id', user?.id)
+        .single()
+
+      const departmentId = deanData?.department_id
+
+      if (!departmentId) {
+        console.error('Dean has no department assigned')
+        return
+      }
+
+      // Get total students in dean's department
+      const { count: totalStudents } = await supabase
+        .from('students')
+        .select('*, batches!inner(*, courses!inner(department_id))', { count: 'exact', head: true })
+        .eq('batches.courses.department_id', departmentId)
+
+      // Get total lecturers in dean's department
+      const { count: totalLecturers } = await supabase
+        .from('lecturers')
+        .select('*', { count: 'exact', head: true })
+        .eq('department_id', departmentId)
+
+      // Get total courses in dean's department
+      const { count: totalCourses } = await supabase
+        .from('courses')
+        .select('*', { count: 'exact', head: true })
+        .eq('department_id', departmentId)
+
+      // Get today's attendance
+      const today = new Date()
+      const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString()
+      const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString()
+
+      const { data: todayAttendance } = await supabase
+        .from('attendance')
+        .select(`
+          status,
+          students!inner(
+            batches!inner(
+              courses!inner(department_id)
+            )
+          )
+        `)
+        .eq('students.batches.courses.department_id', departmentId)
+        .gte('timestamp', startOfDay)
+        .lte('timestamp', endOfDay)
+
+      const todayPresent = todayAttendance?.filter(a => a.status === 'present').length || 0
+      const todayTotal = todayAttendance?.length || 1
+      const todayRate = Math.round((todayPresent / todayTotal) * 100)
+
+      // Get this week's attendance
+      const startOfWeek = new Date(today)
+      startOfWeek.setDate(today.getDate() - today.getDay())
+      startOfWeek.setHours(0, 0, 0, 0)
+
+      const { data: weekAttendance } = await supabase
+        .from('attendance')
+        .select(`
+          status,
+          students!inner(
+            batches!inner(
+              courses!inner(department_id)
+            )
+          )
+        `)
+        .eq('students.batches.courses.department_id', departmentId)
+        .gte('timestamp', startOfWeek.toISOString())
+
+      const weekPresent = weekAttendance?.filter(a => a.status === 'present').length || 0
+      const weekTotal = weekAttendance?.length || 1
+      const weekRate = Math.round((weekPresent / weekTotal) * 100)
+
+      // Get this month's attendance
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+      
+      const { data: monthAttendance } = await supabase
+        .from('attendance')
+        .select(`
+          status,
+          students!inner(
+            batches!inner(
+              courses!inner(department_id)
+            )
+          )
+        `)
+        .eq('students.batches.courses.department_id', departmentId)
+        .gte('timestamp', startOfMonth.toISOString())
+
+      const monthPresent = monthAttendance?.filter(a => a.status === 'present').length || 0
+      const monthTotal = monthAttendance?.length || 1
+      const monthRate = Math.round((monthPresent / monthTotal) * 100)
+
+      // Overall attendance rate (all time) for dean's department
+      const { data: allAttendance } = await supabase
+        .from('attendance')
+        .select(`
+          status,
+          students!inner(
+            batches!inner(
+              courses!inner(department_id)
+            )
+          )
+        `)
+        .eq('students.batches.courses.department_id', departmentId)
+
+      const allPresent = allAttendance?.filter(a => a.status === 'present').length || 0
+      const allTotal = allAttendance?.length || 1
+      const overallRate = Math.round((allPresent / allTotal) * 100)
+
+      setStats({
+        totalStudents: totalStudents || 0,
+        totalLecturers: totalLecturers || 0,
+        totalCourses: totalCourses || 0,
+        attendanceRate: overallRate,
+        todayAttendance: todayRate,
+        weekAttendance: weekRate,
+        monthAttendance: monthRate
+      })
+    } catch (error) {
+      console.error('Error fetching stats:', error)
+    }
+  }
+
+  const fetchWeeklyAttendance = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      
+      // Get dean's department
+      const { data: deanData } = await supabase
+        .from('users')
+        .select('department_id')
+        .eq('id', user?.id)
+        .single()
+
+      const departmentId = deanData?.department_id
+      if (!departmentId) return
+
+      const today = new Date()
+      const weekData = []
+
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today)
+        date.setDate(today.getDate() - i)
+        const startOfDay = new Date(date.setHours(0, 0, 0, 0)).toISOString()
+        const endOfDay = new Date(date.setHours(23, 59, 59, 999)).toISOString()
+
+        const { data: dayAttendance } = await supabase
+          .from('attendance')
+          .select(`
+            status,
+            students!inner(
+              batches!inner(
+                courses!inner(department_id)
+              )
+            )
+          `)
+          .eq('students.batches.courses.department_id', departmentId)
+          .gte('timestamp', startOfDay)
+          .lte('timestamp', endOfDay)
+
+        const present = dayAttendance?.filter(a => a.status === 'present').length || 0
+        const total = dayAttendance?.length || 1
+        const rate = Math.round((present / total) * 100)
+
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        weekData.push({
+          name: dayNames[new Date(date).getDay()],
+          attendance: rate,
+          students: total
+        })
+      }
+
+      setAttendanceData(weekData)
+    } catch (error) {
+      console.error('Error fetching weekly attendance:', error)
+    }
+  }
+
+  const fetchDepartmentData = async () => {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      
+      // Get dean's department only
+      const { data: deanData } = await supabase
+        .from('users')
+        .select('department_id')
+        .eq('id', user?.id)
+        .single()
+
+      const departmentId = deanData?.department_id
+      if (!departmentId) return
+
+      // Get batches in dean's department with student counts
+      const { data: batches } = await supabase
+        .from('batches')
+        .select(`
+          id,
+          name,
+          courses!inner(department_id)
+        `)
+        .eq('courses.department_id', departmentId)
+
+      const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F']
+      
+      // Count students per batch
+      const batchData = await Promise.all(
+        (batches || []).map(async (batch: any, index: number) => {
+          const { count } = await supabase
+            .from('students')
+            .select('*', { count: 'exact', head: true })
+            .eq('batch_id', batch.id)
+
+          return {
+            name: batch.name,
+            students: count || 0,
+            color: colors[index % colors.length]
+          }
+        })
+      )
+
+      setDepartmentData(batchData)
+    } catch (error) {
+      console.error('Error fetching department data:', error)
+    }
+  }
 
   if (loading) {
     return (
@@ -104,7 +354,7 @@ export default function DeanDashboard() {
   const statCards = [
     {
       title: 'Total Students',
-      value: 1250,
+      value: stats.totalStudents,
       icon: IconUsers,
       description: 'Enrolled students',
       change: '+12%',
@@ -115,7 +365,7 @@ export default function DeanDashboard() {
     },
     {
       title: 'Total Lecturers',
-      value: 45,
+      value: stats.totalLecturers,
       icon: IconSchool,
       description: 'Active lecturers',
       change: '+5%',
@@ -126,7 +376,7 @@ export default function DeanDashboard() {
     },
     {
       title: 'Total Courses',
-      value: 78,
+      value: stats.totalCourses,
       icon: IconBook,
       description: 'Active courses',
       change: '+8%',
@@ -137,9 +387,9 @@ export default function DeanDashboard() {
     },
     {
       title: 'Attendance Rate',
-      value: '87.5%',
+      value: `${stats.attendanceRate}%`,
       icon: IconTarget,
-      description: 'Current attendance rate',
+      description: 'Overall attendance rate',
       change: '+2.1%',
       changeType: 'positive' as const,
       color: 'text-emerald-600',
@@ -151,7 +401,7 @@ export default function DeanDashboard() {
   const attendanceCards = [
     {
       title: 'Today\'s Attendance',
-      value: '87.5%',
+      value: `${stats.todayAttendance}%`,
       icon: IconTarget,
       description: 'Current day attendance rate',
       change: '+3.2%',
@@ -162,7 +412,7 @@ export default function DeanDashboard() {
     },
     {
       title: 'This Week',
-      value: '82.3%',
+      value: `${stats.weekAttendance}%`,
       icon: IconTrendingUp,
       description: 'Weekly attendance rate',
       change: '+1.8%',
@@ -173,7 +423,7 @@ export default function DeanDashboard() {
     },
     {
       title: 'This Month',
-      value: '85.1%',
+      value: `${stats.monthAttendance}%`,
       icon: IconTrophy,
       description: 'Monthly attendance rate',
       change: '+2.5%',

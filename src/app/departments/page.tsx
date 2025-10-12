@@ -34,13 +34,32 @@ export default function DepartmentsPage() {
       console.log('=== Fetching Departments from Database ===')
       const { supabase } = await import('@/lib/supabase')
       
-      const { data: departments, error } = await supabase
+      // Get current user to check role
+      const { getCurrentUser } = await import('@/lib/auth')
+      const currentUser = await getCurrentUser()
+
+      let query = supabase
         .from('departments')
         .select(`
           *,
           campuses!inner(*)
         `)
         .order('created_at', { ascending: false })
+
+      // If user is a dean, filter by their department only
+      if (currentUser?.role === 'dean') {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('department_id')
+          .eq('id', currentUser.id)
+          .single()
+
+        if (userData?.department_id) {
+          query = query.eq('id', userData.department_id)
+        }
+      }
+
+      const { data: departments, error } = await query
 
       console.log('Departments from database:', { data: departments, error })
 

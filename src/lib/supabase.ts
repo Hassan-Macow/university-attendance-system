@@ -1,11 +1,15 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // Validate environment variables
-// Use fallback for build time, but real values will be used at runtime
-// Force rebuild - Digital Ocean deployment
-// Check for both undefined and empty string
-const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_URL.trim()) || 'https://gmmapyjirjnoxpunajvid.supabase.co'
-const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.trim()) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbWFweWppcmpub3hwdW5hanZpZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzI4MzAxMTcyLCJleHAiOjIwNDM4NzcxNzJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtbWFweWppcmpub3hwdW5hanZpZCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzI4MzAxMTcyLCJleHAiOjIwNDM4NzcxNzJ9.9sZS16ImfubZ41LCJpYXQiOjE3MjgzMDExNzIsImV4cCI6MjA0Mzg3NzE3Mn0.wdFsPsDgyKlVmmeCRk6MzIpT1x_4gvdA6YumvV8gRb3s'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+// Check if environment variables are set
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Missing Supabase environment variables')
+  console.error('Please check your .env.local file')
+  throw new Error('Missing Supabase configuration. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local')
+}
 
 // Only create the client if we have valid environment variables
 let supabase: SupabaseClient
@@ -25,13 +29,19 @@ if (typeof window !== 'undefined') {
 }
 
 try {
-  supabase = createClient(supabaseUrl, supabaseAnonKey, supabaseConfig)
+  // Trim any whitespace from the credentials
+  const cleanUrl = supabaseUrl.trim()
+  const cleanKey = supabaseAnonKey.trim()
+  
+  supabase = createClient(cleanUrl, cleanKey, supabaseConfig)
   if (typeof window !== 'undefined') {
     console.log('✅ Supabase client initialized successfully')
   }
 } catch (error) {
-  console.error('Failed to initialize Supabase client:', error)
-  throw new Error('Failed to initialize Supabase client')
+  console.error('❌ Failed to initialize Supabase client:', error)
+  console.error('URL:', supabaseUrl)
+  console.error('Key length:', supabaseAnonKey?.length)
+  throw new Error(`Failed to initialize Supabase client: ${error}`)
 }
 
 // Export types and client

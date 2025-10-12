@@ -34,13 +34,33 @@ export default function BatchesPage() {
       console.log('=== Fetching Batches from Database ===')
       const { supabase } = await import('@/lib/supabase')
       
-      const { data: batches, error } = await supabase
+      // Get current user to check role
+      const { getCurrentUser } = await import('@/lib/auth')
+      const currentUser = await getCurrentUser()
+
+      let query = supabase
         .from('batches')
         .select(`
           *,
-          departments!inner(*)
+          departments!inner(*),
+          courses!inner(department_id)
         `)
         .order('created_at', { ascending: false })
+
+      // If user is a dean, filter by their department
+      if (currentUser?.role === 'dean') {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('department_id')
+          .eq('id', currentUser.id)
+          .single()
+
+        if (userData?.department_id) {
+          query = query.eq('courses.department_id', userData.department_id)
+        }
+      }
+
+      const { data: batches, error } = await query
 
       console.log('Batches from database:', { data: batches, error })
 

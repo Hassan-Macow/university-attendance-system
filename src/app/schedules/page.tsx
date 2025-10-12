@@ -7,14 +7,19 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Calendar, Clock, MapPin, User, BookOpen } from 'lucide-react'
 import { showToast } from '@/components/ui/toast'
+import { getCurrentUser } from '@/lib/auth'
+import { AuthUser } from '@/lib/auth'
 
 export default function SchedulesPage() {
   const [schedules, setSchedules] = useState<any[]>([])
+  const [allSchedules, setAllSchedules] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [courses, setCourses] = useState<any[]>([])
   const [lecturers, setLecturers] = useState<any[]>([])
   const [campuses, setCampuses] = useState<any[]>([])
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
+  const [filterMode, setFilterMode] = useState<'all' | 'today' | 'week'>('all')
   const [formData, setFormData] = useState({
     course_id: '',
     lecturer_id: '',
@@ -25,18 +30,38 @@ export default function SchedulesPage() {
   })
 
   useEffect(() => {
-    fetchSchedules()
-    fetchCourses()
-    fetchLecturers()
-    fetchCampuses()
+    loadUserAndData()
   }, [])
 
-  const fetchSchedules = async () => {
+  const loadUserAndData = async () => {
+    const user = await getCurrentUser()
+    setCurrentUser(user)
+    
+    // Pass user to fetchSchedules to ensure filtering works
+    await fetchSchedules(user)
+    
+    // Only fetch create form data if user can create schedules
+    if (user && (user.role === 'superadmin' || user.role === 'dean')) {
+      fetchCourses()
+      fetchLecturers()
+      fetchCampuses()
+    }
+  }
+
+  // Check if user can create schedules
+  const canCreateSchedule = () => {
+    return currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'dean')
+  }
+
+  const fetchSchedules = async (user?: AuthUser | null) => {
     try {
       console.log('=== Fetching Class Schedules from Database ===')
       const { supabase } = await import('@/lib/supabase')
       
-      const { data: schedules, error } = await supabase
+      // Use passed user or currentUser state
+      const activeUser = user || currentUser
+      
+      let query = supabase
         .from('class_sessions')
         .select(`
           *,
@@ -50,7 +75,43 @@ export default function SchedulesPage() {
           ),
           campuses!inner(*)
         `)
-        .order('schedule_time', { ascending: true })
+
+      // If user is a lecturer, only show their schedules
+      if (activeUser && activeUser.role === 'lecturer') {
+        console.log('🔒 Filtering schedules for lecturer:', activeUser.id)
+        // First get the lecturer ID for this user
+        const { data: lecturerData, error: lecturerError } = await supabase
+          .from('lecturers')
+          .select('id')
+          .eq('user_id', activeUser.id)
+          .single()
+        
+        console.log('Lecturer data:', lecturerData, 'Error:', lecturerError)
+        
+        if (lecturerData) {
+          query = query.eq('lecturer_id', lecturerData.id)
+          console.log('✅ Applied lecturer filter for lecturer_id:', lecturerData.id)
+        } else {
+          console.log('⚠️ No lecturer profile found for user')
+        }
+      } else if (activeUser && activeUser.role === 'dean') {
+        console.log('🔒 Filtering schedules for dean:', activeUser.id)
+        // Get dean's department
+        const { data: userData } = await supabase
+          .from('users')
+          .select('department_id')
+          .eq('id', activeUser.id)
+          .single()
+
+        if (userData?.department_id) {
+          query = query.eq('courses.department_id', userData.department_id)
+          console.log('✅ Applied dean filter for department_id:', userData.department_id)
+        }
+      } else {
+        console.log('👑 Showing all schedules for role:', activeUser?.role)
+      }
+
+      const { data: schedules, error } = await query.order('schedule_time', { ascending: true })
 
       console.log('Class sessions from database:', { data: schedules, error })
 
@@ -74,12 +135,44 @@ export default function SchedulesPage() {
       })) || []
 
       setSchedules(transformedSchedules)
+      setAllSchedules(transformedSchedules)
     } catch (error) {
       console.error('Error fetching schedules:', error)
       showToast.error('Error', 'Failed to fetch class schedules')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Filter schedules based on selected mode
+  const filterSchedules = (mode: 'all' | 'today' | 'week') => {
+    setFilterMode(mode)
+    
+    if (mode === 'all') {
+      setSchedules(allSchedules)
+      return
+    }
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    
+    const weekEnd = new Date(today)
+    weekEnd.setDate(weekEnd.getDate() + 7)
+
+    const filtered = allSchedules.filter(schedule => {
+      const scheduleDate = new Date(schedule.schedule_time)
+      
+      if (mode === 'today') {
+        return scheduleDate >= today && scheduleDate < tomorrow
+      } else if (mode === 'week') {
+        return scheduleDate >= today && scheduleDate < weekEnd
+      }
+      return true
+    })
+
+    setSchedules(filtered)
   }
 
   const fetchCourses = async () => {
@@ -213,27 +306,49 @@ export default function SchedulesPage() {
           <div>
             <h1 className="text-3xl font-bold">Class Schedules</h1>
             <p className="text-muted-foreground">
-              View and manage class schedules
+              {canCreateSchedule() ? 'View and manage class schedules' : 'View your assigned class schedules'}
             </p>
+            {currentUser?.role === 'lecturer' && (
+              <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 rounded-full text-sm">
+                <Calendar className="h-4 w-4" />
+                <span>Read-only view • Contact admin to schedule classes</span>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => setShowCreateForm(true)}>
-              <Calendar className="h-4 w-4 mr-2" />
-              Schedule Class
-            </Button>
-            <Button variant="outline">
+            {canCreateSchedule() && (
+              <Button onClick={() => setShowCreateForm(true)}>
+                <Calendar className="h-4 w-4 mr-2" />
+                Schedule Class
+              </Button>
+            )}
+            <Button 
+              variant={filterMode === 'today' ? 'default' : 'outline'}
+              onClick={() => filterSchedules('today')}
+            >
               <Calendar className="h-4 w-4 mr-2" />
               Today
             </Button>
-            <Button variant="outline">
+            <Button 
+              variant={filterMode === 'week' ? 'default' : 'outline'}
+              onClick={() => filterSchedules('week')}
+            >
               <Calendar className="h-4 w-4 mr-2" />
               This Week
             </Button>
+            {filterMode !== 'all' && (
+              <Button 
+                variant="ghost"
+                onClick={() => filterSchedules('all')}
+              >
+                Clear Filter
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Create Schedule Form */}
-        {showCreateForm && (
+        {/* Create Schedule Form - Only for SuperAdmin and Dean */}
+        {showCreateForm && canCreateSchedule() && (
           <Card>
             <CardHeader>
               <CardTitle>Schedule New Class</CardTitle>
@@ -339,9 +454,15 @@ export default function SchedulesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming Classes</CardTitle>
+            <CardTitle>
+              {filterMode === 'today' ? "Today's Classes" : filterMode === 'week' ? 'This Week\'s Classes' : 'Upcoming Classes'}
+            </CardTitle>
             <CardDescription>
-              List of scheduled classes and sessions
+              {filterMode === 'today' 
+                ? 'Classes scheduled for today' 
+                : filterMode === 'week' 
+                ? 'Classes scheduled for this week' 
+                : 'List of scheduled classes and sessions'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -350,7 +471,11 @@ export default function SchedulesPage() {
                 <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium mb-2">No schedules found</h3>
                 <p className="text-muted-foreground">
-                  No classes are scheduled at the moment
+                  {filterMode === 'today' 
+                    ? 'No classes scheduled for today' 
+                    : filterMode === 'week' 
+                    ? 'No classes scheduled for this week' 
+                    : 'No classes are scheduled at the moment'}
                 </p>
               </div>
             ) : (

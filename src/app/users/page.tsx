@@ -853,7 +853,7 @@ export default function UsersPage() {
                           </span>
                         </td>
                         <td className="p-3 text-gray-600 dark:text-gray-400">
-                          N/A
+                          {user.employee_id || user.reg_no || 'N/A'}
                         </td>
                         <td className="p-3 text-gray-600 dark:text-gray-400">
                           {new Date(user.created_at).toLocaleDateString()}

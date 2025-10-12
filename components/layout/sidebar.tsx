@@ -126,7 +126,7 @@ const navigationItems = [
     name: 'Settings',
     href: '/settings',
     icon: IconSettings,
-    roles: ['superadmin']
+    roles: ['superadmin', 'dean', 'lecturer']
   }
 ]
 
