@@ -17,6 +17,7 @@ export default function BatchesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [editingBatch, setEditingBatch] = useState<Batch | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     year_level: '',
@@ -151,6 +152,54 @@ export default function BatchesPage() {
     }
   }
 
+  const handleUpdateBatch = async () => {
+    if (!editingBatch) return
+
+    try {
+      setIsCreating(true)
+      console.log('=== Updating Batch ===')
+      const { supabase } = await import('@/lib/supabase')
+
+      if (!formData.name || !formData.year_level || !formData.department_id || !formData.academic_year) {
+        showToast.error('Validation Error', 'Please fill in all required fields')
+        return
+      }
+
+      const { data: batch, error } = await supabase
+        .from('batches')
+        .update({
+          name: formData.name.trim(),
+          year_level: parseInt(formData.year_level),
+          department_id: formData.department_id,
+          academic_year: formData.academic_year.trim()
+        })
+        .eq('id', editingBatch.id)
+        .select(`
+          *,
+          departments!inner(*)
+        `)
+        .single()
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Update Failed', `Failed to update batch: ${error.message}`)
+        return
+      }
+
+      console.log('Batch updated successfully')
+      setBatches(batches.map(b => b.id === editingBatch.id ? batch : b))
+      setFormData({ name: '', year_level: '', department_id: '', academic_year: '' })
+      setEditingBatch(null)
+      setShowForm(false)
+      showToast.success('Batch Updated', 'Batch has been updated successfully!')
+    } catch (error) {
+      console.error('Failed to create batch:', error)
+      showToast.error('Creation Failed', 'Failed to create batch')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -185,13 +234,16 @@ export default function BatchesPage() {
         {showForm && (
           <Card>
             <CardHeader>
-              <CardTitle>Add New Batch</CardTitle>
+              <CardTitle>{editingBatch ? 'Edit Batch' : 'Add New Batch'}</CardTitle>
               <CardDescription>
-                Create a new academic year group
+                {editingBatch ? 'Update batch information' : 'Create a new academic year group'}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCreateBatch} className="space-y-4">
+              <form onSubmit={(e) => {
+                e.preventDefault()
+                editingBatch ? handleUpdateBatch() : handleCreateBatch(e)
+              }} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Batch Name</Label>
@@ -246,9 +298,13 @@ export default function BatchesPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isCreating}>
-                    {isCreating ? 'Creating...' : 'Create Batch'}
+                    {isCreating ? (editingBatch ? 'Updating...' : 'Creating...') : (editingBatch ? 'Update Batch' : 'Create Batch')}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  <Button type="button" variant="outline" onClick={() => {
+                    setShowForm(false)
+                    setEditingBatch(null)
+                    setFormData({ name: '', year_level: '', department_id: '', academic_year: '' })
+                  }}>
                     Cancel
                   </Button>
                 </div>
@@ -303,7 +359,20 @@ export default function BatchesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setEditingBatch(batch)
+                              setFormData({
+                                name: batch.name,
+                                year_level: batch.year_level.toString(),
+                                department_id: batch.department_id,
+                                academic_year: batch.academic_year
+                              })
+                              setShowForm(true)
+                            }}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
                         </div>

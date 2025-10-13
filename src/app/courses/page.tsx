@@ -19,6 +19,7 @@ export default function CoursesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -267,6 +268,61 @@ export default function CoursesPage() {
       setShowForm(false)
       showToast.success('Course Created', 'Course has been created successfully in database!')
     } catch (error) {
+      console.error('Creation error:', error)
+      showToast.error('Error', 'Failed to create course')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleUpdateCourse = async () => {
+    if (!editingCourse) return
+
+    try {
+      setIsCreating(true)
+      console.log('=== Updating Course ===')
+      const { supabase } = await import('@/lib/supabase')
+
+      if (!formData.name || !formData.code || !formData.department_id || !formData.batch_id || !formData.lecturer_id) {
+        showToast.error('Validation Error', 'Please fill in all required fields')
+        return
+      }
+
+      const { data: course, error } = await supabase
+        .from('courses')
+        .update({
+          name: formData.name.trim(),
+          code: formData.code.trim(),
+          department_id: formData.department_id,
+          batch_id: formData.batch_id,
+          lecturer_id: formData.lecturer_id,
+          credits: parseInt(formData.credits)
+        })
+        .eq('id', editingCourse.id)
+        .select(`
+          *,
+          departments!inner(*),
+          batches!inner(*),
+          lecturers!inner(
+            *,
+            users!inner(*)
+          )
+        `)
+        .single()
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Update Failed', `Failed to update course: ${error.message}`)
+        return
+      }
+
+      console.log('Course updated successfully')
+      setCourses(courses.map(c => c.id === editingCourse.id ? course : c))
+      setFormData({ name: '', code: '', department_id: '', batch_id: '', lecturer_id: '', credits: '3' })
+      setEditingCourse(null)
+      setShowForm(false)
+      showToast.success('Course Updated', 'Course has been updated successfully!')
+    } catch (error) {
       console.error('Failed to create course:', error)
       showToast.error('Creation Failed', 'Failed to create course')
     } finally {
@@ -308,13 +364,16 @@ export default function CoursesPage() {
         {showForm && (
           <Card>
             <CardHeader>
-              <CardTitle>Add New Course</CardTitle>
+              <CardTitle>{editingCourse ? 'Edit Course' : 'Add New Course'}</CardTitle>
               <CardDescription>
-                Create a new academic course
+                {editingCourse ? 'Update course information' : 'Create a new academic course'}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCreateCourse} className="space-y-4">
+              <form onSubmit={(e) => {
+                e.preventDefault()
+                editingCourse ? handleUpdateCourse() : handleCreateCourse()
+              }} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Course Name</Label>
@@ -365,7 +424,7 @@ export default function CoursesPage() {
                       <option value="">Select a batch</option>
                       {batches.map((batch) => (
                         <option key={batch.id} value={batch.id}>
-                          {batch.name}
+                          {batch.name} - Year {batch.year_level} ({batch.departments?.name || 'N/A'})
                         </option>
                       ))}
                     </select>
@@ -409,9 +468,13 @@ export default function CoursesPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isCreating}>
-                    {isCreating ? 'Creating...' : 'Create Course'}
+                    {isCreating ? (editingCourse ? 'Updating...' : 'Creating...') : (editingCourse ? 'Update Course' : 'Create Course')}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  <Button type="button" variant="outline" onClick={() => {
+                    setShowForm(false)
+                    setEditingCourse(null)
+                    setFormData({ name: '', code: '', department_id: '', batch_id: '', lecturer_id: '', credits: '3' })
+                  }}>
                     Cancel
                   </Button>
                 </div>
@@ -474,7 +537,22 @@ export default function CoursesPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setEditingCourse(course)
+                              setFormData({
+                                name: course.name,
+                                code: course.code,
+                                department_id: course.department_id,
+                                batch_id: course.batch_id,
+                                lecturer_id: course.lecturer_id,
+                                credits: course.credits.toString()
+                              })
+                              setShowForm(true)
+                            }}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
                         </div>

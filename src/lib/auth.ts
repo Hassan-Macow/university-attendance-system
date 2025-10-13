@@ -20,11 +20,7 @@ export async function signIn(email: string, password: string): Promise<{ user: A
         // Get user profile from our users table
         const { data: userProfile, error: profileError } = await supabase
           .from('users')
-          .select(`
-            *,
-            campuses!inner(*),
-            departments(*)
-          `)
+          .select('*')
           .eq('email', email)
           .single()
 
@@ -48,11 +44,7 @@ export async function signIn(email: string, password: string): Promise<{ user: A
     // First try to find by email
     const { data: userByEmail, error: emailError } = await supabase
       .from('users')
-      .select(`
-        *,
-        campuses!inner(*),
-        departments(*)
-      `)
+      .select('*')
       .eq('email', email)
       .single()
 
@@ -62,11 +54,7 @@ export async function signIn(email: string, password: string): Promise<{ user: A
       // If not found by email, try to find by employee_id
       const { data: userByEmployeeId, error: employeeIdError } = await supabase
         .from('users')
-        .select(`
-          *,
-          campuses!inner(*),
-          departments(*)
-        `)
+        .select('*')
         .eq('employee_id', email) // Use the input as employee_id
         .single()
 
@@ -192,11 +180,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       // Get user profile from our users table
       const { data: userProfile, error: profileError } = await supabase
         .from('users')
-        .select(`
-          *,
-          campuses!inner(*),
-          departments(*)
-        `)
+        .select('*')
         .eq('email', session.user.email)
         .single()
 

@@ -11,10 +11,10 @@ import { Plus, GraduationCap, Edit, Trash2, Upload, FileSpreadsheet, Download } 
 import { Student, Department, Batch } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
 import { ToastContainer, showToast } from '@/components/ui/toast'
-import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+// import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function StudentsPage() {
-  const { confirm, Dialog: ConfirmDialog } = useConfirmDialog()
+  // const { confirm, Dialog: ConfirmDialog } = useConfirmDialog()
   const [students, setStudents] = useState<Student[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [batches, setBatches] = useState<Batch[]>([])
@@ -257,33 +257,28 @@ export default function StudentsPage() {
   }
 
   const handleDeleteStudent = async (studentId: string, studentName: string) => {
-    confirm({
-      title: 'Delete Student',
-      message: `Are you sure you want to delete ${studentName}? This action cannot be undone and will remove all associated attendance records.`,
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-      variant: 'danger',
-      onConfirm: async () => {
-        try {
-          const { error } = await supabase
-            .from('students')
-            .delete()
-            .eq('id', studentId)
+    if (!window.confirm(`Are you sure you want to delete ${studentName}? This action cannot be undone and will remove all associated attendance records.`)) {
+      return
+    }
 
-          if (error) {
-            console.error('Failed to delete student:', error)
-            showToast.error('Delete Failed', `Failed to delete student: ${error.message}`)
-            return
-          }
+    try {
+      const { error } = await supabase
+        .from('students')
+        .delete()
+        .eq('id', studentId)
 
-          setStudents(students.filter(s => s.id !== studentId))
-          showToast.success('Success!', 'Student deleted successfully')
-        } catch (error) {
-          console.error('Failed to delete student:', error)
-          showToast.error('Error', 'Failed to delete student')
-        }
+      if (error) {
+        console.error('Failed to delete student:', error)
+        showToast.error('Delete Failed', `Failed to delete student: ${error.message}`)
+        return
       }
-    })
+
+      setStudents(students.filter(s => s.id !== studentId))
+      showToast.success('Success!', 'Student deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete student:', error)
+      showToast.error('Error', 'Failed to delete student')
+    }
   }
 
   if (isLoading) {
@@ -445,7 +440,7 @@ export default function StudentsPage() {
 
   return (
     <MainLayout>
-      <ConfirmDialog />
+      {/* <ConfirmDialog /> */}
       <ToastContainer />
       <div className="min-h-screen bg-background">
         <div className="p-8">
@@ -533,7 +528,7 @@ export default function StudentsPage() {
                       <option value="">Select a batch</option>
                       {batches.map((batch: any) => (
                         <option key={batch.id} value={batch.id}>
-                          {batch.departments?.name || 'Unknown Dept'} - {batch.name}
+                          {batch.name} - Year {batch.year_level} ({batch.departments?.name || 'N/A'})
                         </option>
                       ))}
                     </select>

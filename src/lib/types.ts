@@ -68,6 +68,7 @@ export interface Batch {
   academic_year: string;
   created_at: string;
   updated_at: string;
+  departments?: Department; // Optional joined relation
 }
 
 export interface Course {

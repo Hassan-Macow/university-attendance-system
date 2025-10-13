@@ -20,6 +20,9 @@ export default function SchedulesPage() {
   const [campuses, setCampuses] = useState<any[]>([])
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
   const [filterMode, setFilterMode] = useState<'all' | 'today' | 'week'>('all')
+  const [selectedSchedule, setSelectedSchedule] = useState<any | null>(null)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false)
   const [formData, setFormData] = useState({
     course_id: '',
     lecturer_id: '',
@@ -258,6 +261,36 @@ export default function SchedulesPage() {
     } catch (error) {
       console.error('Error creating schedule:', error)
       showToast.error('Error', 'Failed to create class schedule')
+    }
+  }
+
+  const handleUpdateSchedule = async () => {
+    try {
+      if (!selectedSchedule || !formData.schedule_time || !formData.room) {
+        showToast.error('Validation Error', 'Please fill in all required fields')
+        return
+      }
+
+      const { supabase } = await import('@/lib/supabase')
+      const { error } = await supabase
+        .from('class_sessions')
+        .update({
+          schedule_time: formData.schedule_time,
+          duration_minutes: formData.duration_minutes,
+          room: formData.room
+        })
+        .eq('id', selectedSchedule.id)
+
+      if (error) throw error
+
+      showToast.success('Success', 'Schedule updated successfully!')
+      setIsEditingSchedule(false)
+      setShowDetailsModal(false)
+      setSelectedSchedule(null)
+      fetchSchedules()
+    } catch (error) {
+      console.error('Error updating schedule:', error)
+      showToast.error('Error', 'Failed to update schedule')
     }
   }
 
@@ -525,7 +558,14 @@ export default function SchedulesPage() {
                       </TableCell>
                       <TableCell>{schedule.duration_minutes} min</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedSchedule(schedule)
+                            setShowDetailsModal(true)
+                          }}
+                        >
                           View Details
                         </Button>
                       </TableCell>
@@ -539,6 +579,192 @@ export default function SchedulesPage() {
           </div>
         </div>
       </div>
+
+      {/* Schedule Details Modal */}
+      {showDetailsModal && selectedSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold">{selectedSchedule.course_name}</h2>
+                  <p className="text-muted-foreground">{selectedSchedule.course_code}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowDetailsModal(false)
+                    setSelectedSchedule(null)
+                  }}
+                >
+                  ✕
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Lecturer Info */}
+              <div className="space-y-2">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Lecturer
+                </h3>
+                <p className="text-lg">{selectedSchedule.lecturer_name}</p>
+              </div>
+
+              {/* Schedule Time */}
+              <div className="space-y-2">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Schedule
+                </h3>
+                {isEditingSchedule ? (
+                  <input
+                    type="datetime-local"
+                    value={formData.schedule_time}
+                    onChange={(e) => setFormData({ ...formData, schedule_time: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
+                ) : (
+                  <p className="text-lg">
+                    {new Date(selectedSchedule.schedule_time).toLocaleString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                )}
+                {isEditingSchedule ? (
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">Duration (minutes)</label>
+                    <input
+                      type="number"
+                      value={formData.duration_minutes}
+                      onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })}
+                      className="w-full px-3 py-2 border rounded-md"
+                      min="15"
+                      step="15"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Duration: {selectedSchedule.duration_minutes} minutes</p>
+                )}
+              </div>
+
+              {/* Location */}
+              <div className="space-y-2">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Location
+                </h3>
+                <p className="text-lg">{selectedSchedule.campus_name}</p>
+                {isEditingSchedule ? (
+                  <div className="space-y-2">
+                    <label className="text-sm text-muted-foreground">Room</label>
+                    <input
+                      type="text"
+                      value={formData.room}
+                      onChange={(e) => setFormData({ ...formData, room: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-md"
+                      placeholder="e.g., House 100"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Room: {selectedSchedule.room}</p>
+                )}
+              </div>
+
+              {/* Department */}
+              <div className="space-y-2">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  Department
+                </h3>
+                <p className="text-lg">{selectedSchedule.department_name}</p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-gray-50 dark:bg-gray-900">
+              {currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'dean') && (
+                <div className="flex gap-3">
+                  {isEditingSchedule ? (
+                    <>
+                      <Button
+                        onClick={() => {
+                          setIsEditingSchedule(false)
+                          setFormData({
+                            course_id: '',
+                            lecturer_id: '',
+                            campus_id: '',
+                            schedule_time: '',
+                            duration_minutes: 60,
+                            room: ''
+                          })
+                        }}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleUpdateSchedule}
+                        className="flex-1"
+                      >
+                        Save Changes
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => {
+                          setIsEditingSchedule(true)
+                          setFormData({
+                            course_id: selectedSchedule.course_id,
+                            lecturer_id: selectedSchedule.lecturer_id,
+                            campus_id: selectedSchedule.campus_id,
+                            schedule_time: new Date(selectedSchedule.schedule_time).toISOString().slice(0, 16),
+                            duration_minutes: selectedSchedule.duration_minutes,
+                            room: selectedSchedule.room
+                          })
+                        }}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setShowDetailsModal(false)
+                          setSelectedSchedule(null)
+                          setIsEditingSchedule(false)
+                        }}
+                        className="flex-1"
+                      >
+                        Close
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+              {currentUser && (currentUser.role === 'lecturer' || currentUser.role === 'student') && (
+                <Button
+                  onClick={() => {
+                    setShowDetailsModal(false)
+                    setSelectedSchedule(null)
+                  }}
+                  className="w-full"
+                >
+                  Close
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </MainLayout>
   )
 }
