@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // Process and validate data
+    // Process and validate data with flexible column matching
     const students: Array<{
       full_name: string
       reg_no: string
@@ -151,55 +151,93 @@ export async function POST(request: Request) {
       phone: string | null
     }> = []
     const errors: Array<{ row: number; message: string }> = []
+    const warnings: Array<{ row: number; message: string }> = []
 
     console.log('Processing rows...')
+    
+    // Helper function to find column value (case-insensitive, flexible matching)
+    const getColumnValue = (row: any, possibleNames: string[]): string | null => {
+      for (const name of possibleNames) {
+        const key = Object.keys(row).find(k => k.toLowerCase().includes(name.toLowerCase()))
+        if (key && row[key]) {
+          return row[key].toString().trim()
+        }
+      }
+      return null
+    }
     
     data.forEach((row: any, index: number) => {
       const rowNumber = index + 2 // +2 because of 0-index and header row
       
       try {
+        // Flexible column matching
+        const fullName = getColumnValue(row, ['full name', 'name', 'student name'])
+        const regNo = getColumnValue(row, ['registration number', 'reg no', 'regno', 'registration', 'student id'])
+        const departmentName = getColumnValue(row, ['department', 'dept'])
+        const batchName = getColumnValue(row, ['batch', 'year', 'class'])
+        const email = getColumnValue(row, ['email', 'e-mail'])
+        const phone = getColumnValue(row, ['phone', 'mobile', 'contact'])
+        
         // Validate required fields
-        if (!row['Full Name*']) {
-          throw new Error('Full Name is required')
+        if (!fullName) {
+          throw new Error('Full Name is required (column: "Full Name", "Name", or "Student Name")')
         }
-        if (!row['Registration Number*']) {
-          throw new Error('Registration Number is required')
+        if (!regNo) {
+          throw new Error('Registration Number is required (column: "Registration Number", "Reg No", or "Student ID")')
         }
-        if (!row['Department*']) {
-          throw new Error('Department is required')
+        if (!departmentName) {
+          throw new Error('Department is required (column: "Department" or "Dept")')
         }
-        if (!row['Batch*']) {
-          throw new Error('Batch is required')
+        if (!batchName) {
+          throw new Error('Batch is required (column: "Batch", "Year", or "Class")')
         }
 
-        // Find department by name (case-insensitive)
-        const departmentName = row['Department*'].toString().trim()
+        // Validate registration number format (alphanumeric, no special chars except dash/underscore)
+        if (!/^[a-zA-Z0-9_-]+$/.test(regNo)) {
+          warnings.push({
+            row: rowNumber,
+            message: `Registration number "${regNo}" contains special characters`
+          })
+        }
+
+        // Find department by name (case-insensitive, partial match)
         const department = departments?.find(
-          d => d.name.toLowerCase() === departmentName.toLowerCase()
+          d => d.name.toLowerCase().includes(departmentName.toLowerCase()) ||
+               departmentName.toLowerCase().includes(d.name.toLowerCase())
         )
         
         if (!department) {
-          throw new Error(`Department "${departmentName}" not found. Please use exact department name.`)
+          const availableDepts = departments?.map(d => d.name).join(', ') || 'none'
+          throw new Error(`Department "${departmentName}" not found. Available: ${availableDepts}`)
         }
 
-        // Find batch by name (case-insensitive)
-        const batchName = row['Batch*'].toString().trim()
+        // Find batch by name (case-insensitive, partial match)
         const batch = batches?.find(
-          b => b.name.toLowerCase() === batchName.toLowerCase()
+          b => b.name.toLowerCase().includes(batchName.toLowerCase()) ||
+               batchName.toLowerCase().includes(b.name.toLowerCase())
         )
         
         if (!batch) {
-          throw new Error(`Batch "${batchName}" not found. Please use exact batch name.`)
+          const availableBatches = batches?.map(b => b.name).join(', ') || 'none'
+          throw new Error(`Batch "${batchName}" not found. Available: ${availableBatches}`)
+        }
+
+        // Validate email format if provided
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          warnings.push({
+            row: rowNumber,
+            message: `Invalid email format: "${email}"`
+          })
         }
 
         students.push({
-          full_name: row['Full Name*'].toString().trim(),
-          reg_no: row['Registration Number*'].toString().trim(),
+          full_name: fullName,
+          reg_no: regNo,
           department_id: department.id,
           batch_id: batch.id,
           campus_id: department.campus_id,
-          email: row['Email'] ? row['Email'].toString().trim() : null,
-          phone: row['Phone'] ? row['Phone'].toString().trim() : null
+          email: email || null,
+          phone: phone || null
         })
       } catch (error) {
         errors.push({
@@ -252,7 +290,8 @@ export async function POST(request: Request) {
       success: true,
       count: result?.length || 0,
       students: result,
-      ...(errors.length > 0 && { warnings: errors })
+      ...(errors.length > 0 && { errors }),
+      ...(warnings.length > 0 && { warnings })
     })
 
   } catch (error: any) {

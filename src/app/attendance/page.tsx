@@ -18,6 +18,8 @@ interface ClassSession {
   course_code: string
   batch_id: string
   batch_name: string
+  department_id: string
+  department_name: string
   schedule_time: string
   duration_minutes: number
   room?: string
@@ -120,7 +122,12 @@ export default function AttendancePage() {
             name,
             code,
             lecturer_id,
+            department_id,
             batches!inner(
+              id,
+              name
+            ),
+            departments!inner(
               id,
               name
             )
@@ -152,6 +159,8 @@ export default function AttendancePage() {
         course_code: session.courses.code,
         batch_id: session.courses.batches.id,
         batch_name: session.courses.batches.name,
+        department_id: session.courses.departments.id,
+        department_name: session.courses.departments.name,
         schedule_time: session.schedule_time,
         duration_minutes: session.duration_minutes,
         room: session.room,
@@ -189,16 +198,43 @@ export default function AttendancePage() {
     try {
       const { supabase } = await import('@/lib/supabase')
       
-      // Get students in this batch
+      console.log('📚 Fetching students for session:', {
+        course_name: session.course_name,
+        department_id: session.department_id,
+        department_name: session.department_name,
+        batch_id: session.batch_id,
+        batch_name: session.batch_name
+      })
+      
+      // Get students enrolled in this specific department AND batch
+      // Students must match BOTH department_id AND batch_id
       const { data: studentsData, error: studentsError } = await supabase
         .from('students')
-        .select('id, full_name, reg_no')
+        .select('id, full_name, reg_no, batch_id, department_id')
+        .eq('department_id', session.department_id)
         .eq('batch_id', session.batch_id)
         .order('full_name', { ascending: true })
+
+      console.log('👥 Students query result:', {
+        count: studentsData?.length || 0,
+        students: studentsData?.map(s => ({ 
+          name: s.full_name, 
+          dept_id: s.department_id, 
+          batch_id: s.batch_id 
+        })),
+        error: studentsError
+      })
 
       if (studentsError) {
         console.error('Error fetching students:', studentsError)
         showToast.error('Error', 'Failed to fetch students')
+        return
+      }
+      
+      if (!studentsData || studentsData.length === 0) {
+        console.warn('⚠️ No students found for batch:', session.batch_id)
+        showToast.error('No Students', `No students found in ${session.batch_name}. Please ensure students are assigned to this batch.`)
+        setStudents([])
         return
       }
 
