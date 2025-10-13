@@ -82,7 +82,9 @@ export async function signIn(email: string, password: string): Promise<{ user: A
     }
 
     // Check password (simple comparison for custom users)
-    if (userProfile.password_hash !== password) {
+    // Check both password_hash and password columns for compatibility
+    const storedPassword = userProfile.password_hash || userProfile.password
+    if (!storedPassword || storedPassword !== password) {
       return { user: null, error: 'Invalid credentials' }
     }
 

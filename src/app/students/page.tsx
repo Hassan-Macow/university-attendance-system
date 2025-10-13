@@ -11,8 +11,10 @@ import { Plus, GraduationCap, Edit, Trash2, Upload, FileSpreadsheet, Download } 
 import { Student, Department, Batch } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
 import { ToastContainer, showToast } from '@/components/ui/toast'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 
 export default function StudentsPage() {
+  const { confirm, Dialog: ConfirmDialog } = useConfirmDialog()
   const [students, setStudents] = useState<Student[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [batches, setBatches] = useState<Batch[]>([])
@@ -36,6 +38,7 @@ export default function StudentsPage() {
     email: '',
     phone: ''
   })
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null)
 
   useEffect(() => {
     fetchStudents()
@@ -54,7 +57,7 @@ export default function StudentsPage() {
         .select(`
           *,
           departments!inner(*),
-          batches!inner(*, courses!inner(department_id)),
+          batches!inner(*),
           campuses!inner(*)
         `)
         .order('created_at', { ascending: false })
@@ -71,7 +74,7 @@ export default function StudentsPage() {
         console.log('🔍 Department ID:', userData?.department_id)
 
         if (userData?.department_id) {
-          query = query.eq('batches.courses.department_id', userData.department_id)
+          query = query.eq('department_id', userData.department_id)
           console.log('✅ Applied department filter:', userData.department_id)
         } else {
           console.warn('⚠️ Dean has no department_id assigned! Showing all data.')
@@ -115,7 +118,13 @@ export default function StudentsPage() {
     try {
       const { data, error } = await supabase
         .from('batches')
-        .select('*')
+        .select(`
+          *,
+          departments!inner(
+            id,
+            name
+          )
+        `)
         .order('name', { ascending: true })
 
       if (error) {
@@ -180,6 +189,101 @@ export default function StudentsPage() {
     } finally {
       setIsCreating(false)
     }
+  }
+
+  const handleEditStudent = (student: Student) => {
+    setEditingStudent(student)
+    setFormData({
+      full_name: student.full_name,
+      reg_no: student.reg_no,
+      department_id: student.department_id,
+      batch_id: student.batch_id,
+      email: student.email || '',
+      phone: student.phone || ''
+    })
+    setShowForm(true)
+  }
+
+  const handleUpdateStudent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingStudent) return
+
+    setIsCreating(true)
+
+    try {
+      const selectedDepartment = departments.find(d => d.id === formData.department_id)
+      if (!selectedDepartment) {
+        showToast.error('Invalid Selection', 'Please select a valid department')
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('students')
+        .update({
+          full_name: formData.full_name,
+          reg_no: formData.reg_no,
+          department_id: formData.department_id,
+          batch_id: formData.batch_id,
+          campus_id: selectedDepartment.campus_id,
+          email: formData.email || null,
+          phone: formData.phone || null
+        })
+        .eq('id', editingStudent.id)
+        .select()
+
+      if (error) {
+        console.error('Failed to update student:', error)
+        if (error.code === '23505') {
+          showToast.error('Duplicate Entry', 'Student with this registration number already exists')
+        } else {
+          showToast.error('Update Failed', `Failed to update student: ${error.message}`)
+        }
+        return
+      }
+
+      if (data && data[0]) {
+        setStudents(students.map(s => s.id === editingStudent.id ? data[0] : s))
+        setFormData({ full_name: '', reg_no: '', department_id: '', batch_id: '', email: '', phone: '' })
+        setEditingStudent(null)
+        setShowForm(false)
+        showToast.success('Success!', 'Student updated successfully')
+      }
+    } catch (error) {
+      console.error('Failed to update student:', error)
+      showToast.error('Error', 'Failed to update student')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleDeleteStudent = async (studentId: string, studentName: string) => {
+    confirm({
+      title: 'Delete Student',
+      message: `Are you sure you want to delete ${studentName}? This action cannot be undone and will remove all associated attendance records.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('students')
+            .delete()
+            .eq('id', studentId)
+
+          if (error) {
+            console.error('Failed to delete student:', error)
+            showToast.error('Delete Failed', `Failed to delete student: ${error.message}`)
+            return
+          }
+
+          setStudents(students.filter(s => s.id !== studentId))
+          showToast.success('Success!', 'Student deleted successfully')
+        } catch (error) {
+          console.error('Failed to delete student:', error)
+          showToast.error('Error', 'Failed to delete student')
+        }
+      }
+    })
   }
 
   if (isLoading) {
@@ -341,6 +445,7 @@ export default function StudentsPage() {
 
   return (
     <MainLayout>
+      <ConfirmDialog />
       <ToastContainer />
       <div className="min-h-screen bg-background">
         <div className="p-8">
@@ -371,13 +476,13 @@ export default function StudentsPage() {
         {showForm && (
           <Card>
             <CardHeader>
-              <CardTitle>Add New Student</CardTitle>
+              <CardTitle>{editingStudent ? 'Edit Student' : 'Add New Student'}</CardTitle>
               <CardDescription>
-                Enter student information
+                {editingStudent ? 'Update student information' : 'Enter student information'}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCreateStudent} className="space-y-4">
+              <form onSubmit={editingStudent ? handleUpdateStudent : handleCreateStudent} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="full_name">Full Name</Label>
@@ -426,9 +531,9 @@ export default function StudentsPage() {
                       required
                     >
                       <option value="">Select a batch</option>
-                      {batches.map((batch) => (
+                      {batches.map((batch: any) => (
                         <option key={batch.id} value={batch.id}>
-                          {batch.name}
+                          {batch.departments?.name || 'Unknown Dept'} - {batch.name}
                         </option>
                       ))}
                     </select>
@@ -455,9 +560,13 @@ export default function StudentsPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button type="submit" disabled={isCreating}>
-                    {isCreating ? 'Creating...' : 'Create Student'}
+                    {isCreating ? (editingStudent ? 'Updating...' : 'Creating...') : (editingStudent ? 'Update Student' : 'Create Student')}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  <Button type="button" variant="outline" onClick={() => {
+                    setShowForm(false)
+                    setEditingStudent(null)
+                    setFormData({ full_name: '', reg_no: '', department_id: '', batch_id: '', email: '', phone: '' })
+                  }}>
                     Cancel
                   </Button>
                 </div>
@@ -705,10 +814,18 @@ export default function StudentsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-2 justify-end">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditStudent(student)}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteStudent(student.id, student.full_name)}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

@@ -42,8 +42,7 @@ export default function BatchesPage() {
         .from('batches')
         .select(`
           *,
-          departments!inner(*),
-          courses!inner(department_id)
+          departments!inner(*)
         `)
         .order('created_at', { ascending: false })
 
@@ -56,7 +55,7 @@ export default function BatchesPage() {
           .single()
 
         if (userData?.department_id) {
-          query = query.eq('courses.department_id', userData.department_id)
+          query = query.eq('department_id', userData.department_id)
         }
       }
 
