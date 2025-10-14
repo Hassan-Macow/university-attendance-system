@@ -38,6 +38,17 @@ export interface Department {
   updated_at: string;
 }
 
+export interface Program {
+  id: string;
+  name: string;
+  code: string;
+  department_id: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+  departments?: Department; // Optional joined relation
+}
+
 export interface Lecturer {
   id: string;
   user_id: string;
@@ -52,12 +63,14 @@ export interface Student {
   full_name: string;
   reg_no: string;
   department_id: string;
+  program_id?: string;
   batch_id: string;
   campus_id: string;
   email?: string;
   phone?: string;
   created_at: string;
   updated_at: string;
+  programs?: Program; // Optional joined relation
 }
 
 export interface Batch {
@@ -76,6 +89,7 @@ export interface Course {
   name: string;
   code: string;
   department_id: string;
+  program_id?: string; // Optional link to program
   lecturer_id: string;
   batch_id: string;
   credits: number;
@@ -86,6 +100,7 @@ export interface Course {
     name: string;
     email: string;
   };
+  programs?: Program; // Optional joined relation
 }
 
 export interface ClassSession {

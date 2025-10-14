@@ -43,9 +43,9 @@ export default function SchedulesPage() {
     // Pass user to fetchSchedules to ensure filtering works
     await fetchSchedules(user)
     
-    // Only fetch create form data if user can create schedules
-    if (user && (user.role === 'superadmin' || user.role === 'dean')) {
-      fetchCourses()
+    // Fetch create form data if user can create schedules (including lecturers)
+    if (user && (user.role === 'superadmin' || user.role === 'dean' || user.role === 'lecturer')) {
+      fetchCourses(user)
       fetchLecturers()
       fetchCampuses()
     }
@@ -53,7 +53,7 @@ export default function SchedulesPage() {
 
   // Check if user can create schedules
   const canCreateSchedule = () => {
-    return currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'dean')
+    return currentUser && (currentUser.role === 'superadmin' || currentUser.role === 'dean' || currentUser.role === 'lecturer')
   }
 
   const fetchSchedules = async (user?: AuthUser | null) => {
@@ -178,13 +178,42 @@ export default function SchedulesPage() {
     setSchedules(filtered)
   }
 
-  const fetchCourses = async () => {
+  const fetchCourses = async (user?: AuthUser | null) => {
     try {
       const { supabase } = await import('@/lib/supabase')
-      const { data, error } = await supabase
+      const activeUser = user || currentUser
+      
+      let query = supabase
         .from('courses')
-        .select('id, name, code')
+        .select('id, name, code, lecturer_id, department_id')
         .order('name')
+      
+      // Filter courses for lecturers - only show their own courses
+      if (activeUser?.role === 'lecturer') {
+        const { data: lecturerData } = await supabase
+          .from('lecturers')
+          .select('id')
+          .eq('user_id', activeUser.id)
+          .single()
+        
+        if (lecturerData) {
+          query = query.eq('lecturer_id', lecturerData.id)
+        }
+      }
+      // Filter courses for deans - only show their department's courses
+      else if (activeUser?.role === 'dean') {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('department_id')
+          .eq('id', activeUser.id)
+          .single()
+        
+        if (userData?.department_id) {
+          query = query.eq('department_id', userData.department_id)
+        }
+      }
+      
+      const { data, error } = await query
       
       if (error) throw error
       setCourses(data || [])

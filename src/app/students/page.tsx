@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, GraduationCap, Edit, Trash2, Upload, FileSpreadsheet, Download } from 'lucide-react'
-import { Student, Department, Batch } from '@/lib/types'
+import { Student, Department, Batch, Program } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
 import { ToastContainer, showToast } from '@/components/ui/toast'
 // import { useConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -17,6 +17,7 @@ export default function StudentsPage() {
   // const { confirm, Dialog: ConfirmDialog } = useConfirmDialog()
   const [students, setStudents] = useState<Student[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [programs, setPrograms] = useState<Program[]>([])
   const [batches, setBatches] = useState<Batch[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
@@ -34,6 +35,7 @@ export default function StudentsPage() {
     full_name: '',
     reg_no: '',
     department_id: '',
+    program_id: '',
     batch_id: '',
     email: '',
     phone: ''
@@ -43,6 +45,7 @@ export default function StudentsPage() {
   useEffect(() => {
     fetchStudents()
     fetchDepartments()
+    fetchPrograms()
     fetchBatches()
   }, [])
 
@@ -114,6 +117,27 @@ export default function StudentsPage() {
     }
   }
 
+  const fetchPrograms = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('programs')
+        .select(`
+          *,
+          departments!inner(*)
+        `)
+        .order('name', { ascending: true })
+
+      if (error) {
+        console.error('Failed to fetch programs:', error)
+        return
+      }
+
+      setPrograms(data || [])
+    } catch (error) {
+      console.error('Failed to fetch programs:', error)
+    }
+  }
+
   const fetchBatches = async () => {
     try {
       const { data, error } = await supabase
@@ -156,6 +180,7 @@ export default function StudentsPage() {
           full_name: formData.full_name,
           reg_no: formData.reg_no,
           department_id: formData.department_id,
+          program_id: formData.program_id || null,
           batch_id: formData.batch_id,
           campus_id: selectedDepartment.campus_id,
           email: formData.email || null,
@@ -197,6 +222,7 @@ export default function StudentsPage() {
       full_name: student.full_name,
       reg_no: student.reg_no,
       department_id: student.department_id,
+      program_id: student.program_id || '',
       batch_id: student.batch_id,
       email: student.email || '',
       phone: student.phone || ''
@@ -223,6 +249,7 @@ export default function StudentsPage() {
           full_name: formData.full_name,
           reg_no: formData.reg_no,
           department_id: formData.department_id,
+          program_id: formData.program_id || null,
           batch_id: formData.batch_id,
           campus_id: selectedDepartment.campus_id,
           email: formData.email || null,
@@ -514,6 +541,24 @@ export default function StudentsPage() {
                           {dept.name}
                         </option>
                       ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="program_id">Program (Optional)</Label>
+                    <select
+                      id="program_id"
+                      value={formData.program_id}
+                      onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">No program</option>
+                      {programs
+                        .filter(prog => !formData.department_id || prog.department_id === formData.department_id)
+                        .map((program) => (
+                          <option key={program.id} value={program.id}>
+                            {program.name} ({program.code})
+                          </option>
+                        ))}
                     </select>
                   </div>
                   <div className="space-y-2">

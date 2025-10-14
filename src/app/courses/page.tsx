@@ -8,12 +8,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, BookOpen, Edit } from 'lucide-react'
-import { Course, Department, Batch } from '@/lib/types'
+import { Course, Department, Batch, Program } from '@/lib/types'
 import { showToast } from '@/components/ui/toast'
 
 export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [programs, setPrograms] = useState<Program[]>([])
   const [batches, setBatches] = useState<Batch[]>([])
   const [lecturers, setLecturers] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -24,6 +25,7 @@ export default function CoursesPage() {
     name: '',
     code: '',
     department_id: '',
+    program_id: '',
     batch_id: '',
     lecturer_id: '',
     credits: '3'
@@ -32,6 +34,7 @@ export default function CoursesPage() {
   useEffect(() => {
     fetchCourses()
     fetchDepartments()
+    fetchPrograms()
     fetchBatches()
     fetchLecturers()
   }, [])
@@ -115,6 +118,34 @@ export default function CoursesPage() {
     } catch (error) {
       console.error('Failed to fetch departments:', error)
       showToast.error('Error', 'Failed to fetch departments')
+    }
+  }
+
+  const fetchPrograms = async () => {
+    try {
+      console.log('=== Fetching Programs from Database ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      const { data: programs, error } = await supabase
+        .from('programs')
+        .select(`
+          *,
+          departments!inner(*)
+        `)
+        .order('created_at', { ascending: false })
+
+      console.log('Programs from database:', { data: programs, error })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch programs from database')
+        return
+      }
+
+      setPrograms(programs || [])
+    } catch (error) {
+      console.error('Failed to fetch programs:', error)
+      showToast.error('Error', 'Failed to fetch programs')
     }
   }
 
@@ -243,6 +274,7 @@ export default function CoursesPage() {
           name: formData.name.trim(),
           code: formData.code.trim(),
           department_id: formData.department_id,
+          program_id: formData.program_id || null,
           batch_id: formData.batch_id,
           lecturer_id: lecturerRecord.id, // Use the lecturer record ID
           credits: parseInt(formData.credits)
@@ -264,7 +296,7 @@ export default function CoursesPage() {
 
       console.log('Course created successfully, updating list')
       setCourses([course, ...courses])
-      setFormData({ name: '', code: '', department_id: '', batch_id: '', lecturer_id: '', credits: '3' })
+      setFormData({ name: '', code: '', department_id: '', program_id: '', batch_id: '', lecturer_id: '', credits: '3' })
       setShowForm(false)
       showToast.success('Course Created', 'Course has been created successfully in database!')
     } catch (error) {
@@ -294,6 +326,7 @@ export default function CoursesPage() {
           name: formData.name.trim(),
           code: formData.code.trim(),
           department_id: formData.department_id,
+          program_id: formData.program_id || null,
           batch_id: formData.batch_id,
           lecturer_id: formData.lecturer_id,
           credits: parseInt(formData.credits)
@@ -318,7 +351,7 @@ export default function CoursesPage() {
 
       console.log('Course updated successfully')
       setCourses(courses.map(c => c.id === editingCourse.id ? course : c))
-      setFormData({ name: '', code: '', department_id: '', batch_id: '', lecturer_id: '', credits: '3' })
+      setFormData({ name: '', code: '', department_id: '', program_id: '', batch_id: '', lecturer_id: '', credits: '3' })
       setEditingCourse(null)
       setShowForm(false)
       showToast.success('Course Updated', 'Course has been updated successfully!')
@@ -413,6 +446,24 @@ export default function CoursesPage() {
                     </select>
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="program_id">Program (Optional)</Label>
+                    <select
+                      id="program_id"
+                      value={formData.program_id}
+                      onChange={(e) => setFormData({ ...formData, program_id: e.target.value })}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">No program</option>
+                      {programs
+                        .filter(prog => !formData.department_id || prog.department_id === formData.department_id)
+                        .map((program) => (
+                          <option key={program.id} value={program.id}>
+                            {program.name} ({program.code})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="batch_id">Batch</Label>
                     <select
                       id="batch_id"
@@ -473,7 +524,7 @@ export default function CoursesPage() {
                   <Button type="button" variant="outline" onClick={() => {
                     setShowForm(false)
                     setEditingCourse(null)
-                    setFormData({ name: '', code: '', department_id: '', batch_id: '', lecturer_id: '', credits: '3' })
+                    setFormData({ name: '', code: '', department_id: '', program_id: '', batch_id: '', lecturer_id: '', credits: '3' })
                   }}>
                     Cancel
                   </Button>
@@ -510,6 +561,7 @@ export default function CoursesPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Department</TableHead>
+                    <TableHead>Program</TableHead>
                     <TableHead>Batch</TableHead>
                     <TableHead>Lecturer</TableHead>
                     <TableHead>Credits</TableHead>
@@ -524,6 +576,9 @@ export default function CoursesPage() {
                       <TableCell>{course.code}</TableCell>
                       <TableCell>
                         {departments.find(dept => dept.id === course.department_id)?.name || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        {course.program_id ? (programs.find(prog => prog.id === course.program_id)?.name || 'N/A') : '-'}
                       </TableCell>
                       <TableCell>
                         {batches.find(batch => batch.id === course.batch_id)?.name || 'N/A'}
@@ -546,6 +601,7 @@ export default function CoursesPage() {
                                 name: course.name,
                                 code: course.code,
                                 department_id: course.department_id,
+                                program_id: course.program_id || '',
                                 batch_id: course.batch_id,
                                 lecturer_id: course.lecturer_id,
                                 credits: course.credits.toString()

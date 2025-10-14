@@ -12,6 +12,7 @@ export async function GET() {
         'Full Name*': 'John Doe',
         'Registration Number*': 'CS2024001',
         'Department*': 'Computer Science',
+        'Program': 'Information Technology',
         'Batch*': 'Batch 1',
         'Email': 'john@example.com',
         'Phone': '+1234567890'
@@ -20,6 +21,7 @@ export async function GET() {
         'Full Name*': 'Jane Smith',
         'Registration Number*': 'CS2024002',
         'Department*': 'Computer Science',
+        'Program': 'Data Science',
         'Batch*': 'Batch 1',
         'Email': 'jane@example.com',
         'Phone': '+9876543210'
@@ -33,6 +35,7 @@ export async function GET() {
       { wch: 25 }, // Full Name
       { wch: 25 }, // Registration Number
       { wch: 25 }, // Department
+      { wch: 25 }, // Program
       { wch: 20 }, // Batch
       { wch: 30 }, // Email
       { wch: 20 }  // Phone
@@ -51,20 +54,23 @@ export async function GET() {
       ['- Batch: Batch name (must match exactly with system)'],
       [''],
       ['OPTIONAL FIELDS:'],
+      ['- Program: Program name (e.g., Information Technology, Data Science)'],
       ['- Email: Valid email address'],
       ['- Phone: Contact number'],
       [''],
       ['IMPORTANT NOTES:'],
-      ['1. Department and Batch names must match EXACTLY with your system'],
+      ['1. Department, Program, and Batch names must match EXACTLY with your system'],
       ['2. Registration numbers must be unique'],
-      ['3. Keep the header row as is'],
-      ['4. Save as .xlsx before uploading'],
-      ['5. The system will automatically assign the correct campus based on department'],
+      ['3. Program must belong to the selected Department'],
+      ['4. Keep the header row as is'],
+      ['5. Save as .xlsx before uploading'],
+      ['6. The system will automatically assign the correct campus based on department'],
       [''],
       ['EXAMPLE:'],
       ['Full Name: John Doe'],
       ['Registration Number: CS2024001'],
       ['Department: Computer Science'],
+      ['Program: Information Technology'],
       ['Batch: Batch 1'],
       ['Email: john@example.com'],
       ['Phone: +1234567890']

@@ -19,15 +19,23 @@ export default function DepartmentsPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const [formData, setFormData] = useState({
     name: '',
     campus_id: ''
   })
 
   useEffect(() => {
+    loadUserAndData()
+  }, [])
+
+  const loadUserAndData = async () => {
+    const { getCurrentUser } = await import('@/lib/auth')
+    const user = await getCurrentUser()
+    setCurrentUser(user)
     fetchDepartments()
     fetchCampuses()
-  }, [])
+  }
 
   const fetchDepartments = async () => {
     try {
@@ -233,13 +241,15 @@ export default function DepartmentsPage() {
           <div>
             <h1 className="text-3xl font-bold">Departments</h1>
             <p className="text-muted-foreground">
-              Manage academic departments within campuses
+              {currentUser?.role === 'dean' ? 'View your assigned department' : 'Manage academic departments within campuses'}
             </p>
           </div>
-          <Button onClick={() => setShowForm(!showForm)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Department
-          </Button>
+          {currentUser?.role === 'superadmin' && (
+            <Button onClick={() => setShowForm(!showForm)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Department
+            </Button>
+          )}
         </div>
 
         {showForm && (
@@ -321,7 +331,9 @@ export default function DepartmentsPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Campus</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {currentUser?.role === 'superadmin' && (
+                      <TableHead className="text-right">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -334,17 +346,19 @@ export default function DepartmentsPage() {
                       <TableCell>
                         {new Date(department.created_at).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleEditDepartment(department)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {currentUser?.role === 'superadmin' && (
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleEditDepartment(department)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

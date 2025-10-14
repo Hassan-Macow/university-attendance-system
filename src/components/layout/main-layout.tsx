@@ -19,7 +19,8 @@ import {
   Settings,
   LogOut,
   Menu,
-  X
+  X,
+  Layers
 } from 'lucide-react'
 
 interface MainLayoutProps {
@@ -63,6 +64,12 @@ export function MainLayout({ children }: MainLayoutProps) {
       name: 'Departments',
       href: '/departments',
       icon: Building2,
+      roles: ['superadmin', 'dean']
+    },
+    {
+      name: 'Programs',
+      href: '/programs',
+      icon: Layers,
       roles: ['superadmin', 'dean']
     },
     {

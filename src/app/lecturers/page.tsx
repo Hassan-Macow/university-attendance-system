@@ -34,7 +34,11 @@ export default function LecturersPage() {
       console.log('=== Fetching Lecturers from Database ===')
       const { supabase } = await import('@/lib/supabase')
       
-      const { data: lecturers, error } = await supabase
+      // Get current user to check role
+      const { getCurrentUser } = await import('@/lib/auth')
+      const currentUser = await getCurrentUser()
+
+      let query = supabase
         .from('lecturers')
         .select(`
           *,
@@ -42,6 +46,21 @@ export default function LecturersPage() {
           departments!inner(*)
         `)
         .order('created_at', { ascending: false })
+
+      // Filter by department for deans
+      if (currentUser?.role === 'dean') {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('department_id')
+          .eq('id', currentUser.id)
+          .single()
+
+        if (userData?.department_id) {
+          query = query.eq('department_id', userData.department_id)
+        }
+      }
+
+      const { data: lecturers, error } = await query
 
       console.log('Lecturers from database:', { data: lecturers, error })
 
