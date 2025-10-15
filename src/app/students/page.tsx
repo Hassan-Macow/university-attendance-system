@@ -263,6 +263,7 @@ export default function StudentsPage() {
 
       if (data && data[0]) {
         setStudents([data[0], ...students])
+        // Reset form data after successful student creation
         setFormData({ full_name: '', reg_no: '', department_id: '', program_id: '', batch_id: '', email: '', phone: '' })
         setShowForm(false)
         showToast.success('Success!', 'Student created successfully')
