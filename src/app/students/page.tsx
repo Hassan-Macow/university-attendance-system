@@ -263,7 +263,7 @@ export default function StudentsPage() {
 
       if (data && data[0]) {
         setStudents([data[0], ...students])
-        setFormData({ full_name: '', reg_no: '', department_id: '', batch_id: '', email: '', phone: '' })
+        setFormData({ full_name: '', reg_no: '', department_id: '', program_id: '', batch_id: '', email: '', phone: '' })
         setShowForm(false)
         showToast.success('Success!', 'Student created successfully')
       }
@@ -329,7 +329,7 @@ export default function StudentsPage() {
 
       if (data && data[0]) {
         setStudents(students.map(s => s.id === editingStudent.id ? data[0] : s))
-        setFormData({ full_name: '', reg_no: '', department_id: '', batch_id: '', email: '', phone: '' })
+        setFormData({ full_name: '', reg_no: '', department_id: '', program_id: '', batch_id: '', email: '', phone: '' })
         setEditingStudent(null)
         setShowForm(false)
         showToast.success('Success!', 'Student updated successfully')
@@ -676,7 +676,7 @@ export default function StudentsPage() {
                   <Button type="button" variant="outline" onClick={() => {
                     setShowForm(false)
                     setEditingStudent(null)
-                    setFormData({ full_name: '', reg_no: '', department_id: '', batch_id: '', email: '', phone: '' })
+                    setFormData({ full_name: '', reg_no: '', department_id: '', program_id: '', batch_id: '', email: '', phone: '' })
                   }}>
                     Cancel
                   </Button>
