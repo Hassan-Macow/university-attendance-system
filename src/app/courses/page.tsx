@@ -234,6 +234,12 @@ export default function CoursesPage() {
       console.log('=== Creating Course in Database ===')
       console.log('Form data:', formData)
       
+      // Validate required fields
+      if (!formData.name || !formData.code || !formData.department_id || !formData.batch_id || !formData.lecturer_id) {
+        showToast.error('Validation Error', 'Please fill in all required fields')
+        return
+      }
+      
       const { supabase } = await import('@/lib/supabase')
       
       // First, check if lecturer exists in lecturers table, if not create it
@@ -405,7 +411,7 @@ export default function CoursesPage() {
             <CardContent>
               <form onSubmit={(e) => {
                 e.preventDefault()
-                editingCourse ? handleUpdateCourse() : handleCreateCourse()
+                editingCourse ? handleUpdateCourse() : handleCreateCourse(e)
               }} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -584,7 +590,7 @@ export default function CoursesPage() {
                         {batches.find(batch => batch.id === course.batch_id)?.name || 'N/A'}
                       </TableCell>
                       <TableCell>
-                        {course.lecturers?.name || 'N/A'}
+                        {course.lecturers?.users?.name || 'N/A'}
                       </TableCell>
                       <TableCell>{course.credits}</TableCell>
                       <TableCell>

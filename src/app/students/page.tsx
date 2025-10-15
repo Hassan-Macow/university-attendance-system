@@ -41,13 +41,72 @@ export default function StudentsPage() {
     phone: ''
   })
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [filterDepartmentId, setFilterDepartmentId] = useState('')
+  const [filterBatchId, setFilterBatchId] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(25)
+
+  // Filter students based on selected filters
+  const filteredStudents = students.filter(student => {
+    const matchesDepartment = !filterDepartmentId || student.department_id === filterDepartmentId
+    const matchesBatch = !filterBatchId || student.batch_id === filterBatchId
+    const matchesSearch = !searchTerm || 
+      student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      student.reg_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (student.email && student.email.toLowerCase().includes(searchTerm.toLowerCase()))
+    
+    return matchesDepartment && matchesBatch && matchesSearch
+  })
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedStudents = filteredStudents.slice(startIndex, endIndex)
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterDepartmentId, filterBatchId, searchTerm])
 
   useEffect(() => {
+    loadUserAndData()
+  }, [])
+
+  const loadUserAndData = async () => {
+    const { getCurrentUser } = await import('@/lib/auth')
+    const user = await getCurrentUser()
+    
+    // If user is dean, fetch their department_id from database
+    if (user?.role === 'dean') {
+      const { supabase } = await import('@/lib/supabase')
+      const { data: userData } = await supabase
+        .from('users')
+        .select('department_id')
+        .eq('id', user.id)
+        .single()
+      
+      if (userData?.department_id) {
+        user.department_id = userData.department_id
+      }
+    }
+    
+    setCurrentUser(user)
+    
     fetchStudents()
     fetchDepartments()
     fetchPrograms()
     fetchBatches()
-  }, [])
+  }
+
+  // Auto-filter for deans to their department
+  useEffect(() => {
+    if (currentUser?.role === 'dean' && currentUser?.department_id && !filterDepartmentId) {
+      setFilterDepartmentId(currentUser.department_id)
+    }
+  }, [currentUser, departments, filterDepartmentId])
 
   const fetchStudents = async () => {
     try {
@@ -331,6 +390,12 @@ export default function StudentsPage() {
           file.name.endsWith('.xls') ||
           file.name.endsWith('.csv')) {
         setUploadFile(file)
+        
+        // Auto-select dean's department if user is dean
+        if (currentUser?.role === 'dean' && currentUser?.department_id) {
+          setSelectedDepartmentId(currentUser.department_id)
+          console.log('Auto-selected dean department:', currentUser.department_id)
+        }
       } else {
         showToast.error('Invalid File', 'Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file')
       }
@@ -377,6 +442,10 @@ export default function StudentsPage() {
       console.log('Fetching /api/students/upload...')
       const response = await fetch('/api/students/upload', {
         method: 'POST',
+        headers: {
+          'x-user-email': currentUser?.email || '',
+          'x-user-role': currentUser?.role || ''
+        },
         body: formData
       })
       console.log('Response received:', response.status, response.statusText)
@@ -434,6 +503,8 @@ export default function StudentsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-user-email': currentUser?.email || '',
+          'x-user-role': currentUser?.role || ''
         },
         body: JSON.stringify({
           students: studentsWithAssignment
@@ -730,6 +801,7 @@ export default function StudentsPage() {
                         value={selectedDepartmentId}
                         onChange={(e) => setSelectedDepartmentId(e.target.value)}
                         className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                        disabled={currentUser?.role === 'dean'}
                       >
                         <option value="">Select Department</option>
                         {departments.map(dept => (
@@ -738,6 +810,11 @@ export default function StudentsPage() {
                           </option>
                         ))}
                       </select>
+                      {currentUser?.role === 'dean' && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Department is automatically set to your department
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-sm font-medium mb-2 block">Batch for All Students *</Label>
@@ -804,23 +881,127 @@ export default function StudentsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>All Students</CardTitle>
-            <CardDescription>
-              List of all enrolled students
-            </CardDescription>
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle>All Students</CardTitle>
+                <CardDescription>
+                  {filteredStudents.length === students.length 
+                    ? `${students.length} total students` 
+                    : `Showing ${filteredStudents.length} of ${students.length} students`}
+                  {filteredStudents.length > itemsPerPage && ` • Page ${currentPage} of ${totalPages}`}
+                </CardDescription>              </div>
+            </div>
+            
+            {/* Filter Controls */}
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Search */}
+                <div>
+                  <Label htmlFor="search" className="text-sm font-medium">Search Students</Label>
+                  <Input
+                    id="search"
+                    placeholder="Search by name, reg no, or email..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                
+                {/* Department Filter */}
+                <div>
+                  <Label htmlFor="department-filter" className="text-sm font-medium">Filter by Department</Label>
+                  <select
+                    id="department-filter"
+                    value={filterDepartmentId}
+                    onChange={(e) => setFilterDepartmentId(e.target.value)}
+                    disabled={currentUser?.role === 'dean'}
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">All Departments</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                  {currentUser?.role === 'dean' && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Showing only your department students
+                    </p>
+                  )}
+                </div>
+                
+                {/* Batch Filter */}
+                <div>
+                  <Label htmlFor="batch-filter" className="text-sm font-medium">Filter by Batch</Label>
+                  <select
+                    id="batch-filter"
+                    value={filterBatchId}
+                    onChange={(e) => setFilterBatchId(e.target.value)}
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">All Batches</option>
+                    {batches.map(batch => {
+                      const department = departments.find(dept => dept.id === batch.department_id)
+                      return (
+                        <option key={batch.id} value={batch.id}>
+                          {batch.name} - Year {batch.year_level} ({batch.academic_year}) - {department?.name || 'Unknown Dept'}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+              </div>
+              
+              {/* Clear Filters Button */}
+              {(filterDepartmentId || filterBatchId || searchTerm) && (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setFilterDepartmentId('')
+                      setFilterBatchId('')
+                      setSearchTerm('')
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            {students.length === 0 ? (
+            {filteredStudents.length === 0 ? (
               <div className="text-center py-8">
                 <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">No students found</h3>
+                <h3 className="text-lg font-medium mb-2">
+                  {students.length === 0 ? 'No students found' : 'No students match your filters'}
+                </h3>
                 <p className="text-muted-foreground mb-4">
-                  Get started by adding your first student
+                  {students.length === 0 
+                    ? 'Get started by adding your first student'
+                    : 'Try adjusting your search criteria or clear the filters'
+                  }
                 </p>
-                <Button onClick={() => setShowForm(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Student
-                </Button>
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={() => setShowForm(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Student
+                  </Button>
+                  {students.length > 0 && (filterDepartmentId || filterBatchId || searchTerm) && (
+                    <Button 
+                      variant="outline"
+                      onClick={() => {
+                        setFilterDepartmentId('')
+                        setFilterBatchId('')
+                        setSearchTerm('')
+                      }}
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <Table>
@@ -837,7 +1018,7 @@ export default function StudentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {students.map((student) => (
+                  {paginatedStudents.map((student) => (
                     <TableRow key={student.id}>
                       <TableCell className="font-medium">{student.full_name}</TableCell>
                       <TableCell>{student.reg_no}</TableCell>
@@ -845,7 +1026,18 @@ export default function StudentsPage() {
                         {departments.find(dept => dept.id === student.department_id)?.name || 'N/A'}
                       </TableCell>
                       <TableCell>
-                        {batches.find(batch => batch.id === student.batch_id)?.name || 'N/A'}
+                        {(() => {
+                          const batch = batches.find(batch => batch.id === student.batch_id)
+                          if (!batch) return 'N/A'
+                          return (
+                            <div className="text-sm">
+                              <div className="font-medium">{batch.name}</div>
+                              <div className="text-muted-foreground">
+                                Year {batch.year_level} • {batch.academic_year}
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </TableCell>
                       <TableCell>{student.email || 'N/A'}</TableCell>
                       <TableCell>{student.phone || 'N/A'}</TableCell>
@@ -874,6 +1066,75 @@ export default function StudentsPage() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+            
+            {/* Pagination Controls */}
+            {filteredStudents.length > 0 && (
+              <div className="mt-4 flex items-center justify-between border-t pt-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredStudents.length)} of {filteredStudents.length} students
+                </div>
+                
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="page-size" className="text-sm text-muted-foreground">Show:</label>
+                    <select
+                      id="page-size"
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value))
+                        setCurrentPage(1)
+                      }}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                    >
+                      First
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    
+                    <span className="text-sm text-muted-foreground">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Last
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

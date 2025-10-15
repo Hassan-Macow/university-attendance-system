@@ -33,6 +33,31 @@ export default function ProgramsPage() {
   const loadUserAndData = async () => {
     const { getCurrentUser } = await import('@/lib/auth')
     const user = await getCurrentUser()
+    
+    console.log('=== Loading User Data ===')
+    console.log('Initial user:', user)
+    
+    // If user is dean, fetch their department_id from database
+    if (user?.role === 'dean') {
+      console.log('User is dean, fetching department_id...')
+      const { supabase } = await import('@/lib/supabase')
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('department_id')
+        .eq('id', user.id)
+        .single()
+      
+      console.log('Department query result:', { data: userData, error })
+      
+      if (userData?.department_id) {
+        user.department_id = userData.department_id
+        console.log('Set department_id to:', user.department_id)
+      } else {
+        console.log('No department_id found for user')
+      }
+    }
+    
+    console.log('Final user before setting state:', user)
     setCurrentUser(user)
     fetchPrograms()
     fetchDepartments()
@@ -138,6 +163,18 @@ export default function ProgramsPage() {
     try {
       console.log('=== Creating Program in Database ===')
       console.log('Form data:', formData)
+      
+      // Validate required fields
+      if (!formData.name || !formData.code || !formData.department_id) {
+        console.log('Validation failed - Form data:', formData)
+        console.log('Missing fields:', {
+          name: !formData.name,
+          code: !formData.code,
+          department_id: !formData.department_id
+        })
+        showToast.error('Validation Error', 'Please fill in all required fields')
+        return
+      }
       
       const { supabase } = await import('@/lib/supabase')
       
@@ -275,9 +312,61 @@ export default function ProgramsPage() {
               {currentUser?.role === 'dean' ? 'Manage programs in your department' : 'Manage academic programs within departments'}
             </p>
           </div>
-          <Button onClick={() => {
+          <Button onClick={async () => {
             setEditingProgram(null)
-            setFormData({ name: '', code: '', department_id: currentUser?.role === 'dean' && currentUser?.department_id ? currentUser.department_id : '', description: '' })
+            
+            // If user is dean, ensure we have their department_id
+            let deanDepartmentId = ''
+            if (currentUser?.role === 'dean') {
+              console.log('Dean user detected, checking department_id...')
+              console.log('Current user department_id:', currentUser.department_id)
+              
+              if (currentUser.department_id) {
+                deanDepartmentId = currentUser.department_id
+                console.log('Using existing department_id:', deanDepartmentId)
+              } else {
+                console.log('No department_id in currentUser, fetching from database...')
+                // Fetch department_id if not available
+                const { supabase } = await import('@/lib/supabase')
+                const { data: userData, error } = await supabase
+                  .from('users')
+                  .select('department_id')
+                  .eq('id', currentUser.id)
+                  .single()
+                
+                console.log('Database query result:', { data: userData, error })
+                
+                if (userData?.department_id) {
+                  deanDepartmentId = userData.department_id
+                  // Update currentUser with department_id
+                  currentUser.department_id = userData.department_id
+                  console.log('Fetched and set department_id:', deanDepartmentId)
+                } else {
+                  console.log('No department_id found in database for dean user')
+                  console.log('Available departments:', departments)
+                  
+                  // Show detailed error message
+                  showToast.error('Configuration Error', 
+                    'Dean user does not have a department assigned in the database. ' +
+                    'Please contact SuperAdmin to assign a department to your account, ' +
+                    'or select a department manually if you have permission.'
+                  )
+                  
+                  // Don't return, let the form open with empty department_id
+                  // The user can select a department manually
+                }
+              }
+            }
+            
+            console.log('Setting form data with department_id:', deanDepartmentId)
+            console.log('Current user:', currentUser)
+            
+            setFormData({ 
+              name: '', 
+              code: '', 
+              department_id: deanDepartmentId, 
+              description: '' 
+            })
             setShowForm(!showForm)
           }}>
             <Plus className="h-4 w-4 mr-2" />
@@ -327,7 +416,7 @@ export default function ProgramsPage() {
                       onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       required
-                      disabled={currentUser?.role === 'dean'}
+                      disabled={currentUser?.role === 'dean' && currentUser?.department_id}
                     >
                       <option value="">Select a department</option>
                       {departments.map((department) => (
@@ -336,6 +425,24 @@ export default function ProgramsPage() {
                         </option>
                       ))}
                     </select>
+                    {currentUser?.role === 'dean' && (
+                      <div className="text-xs text-muted-foreground">
+                        {currentUser?.department_id ? (
+                          <>
+                            <p>Department is automatically set to your department</p>
+                            <p className="text-green-600">Selected Department ID: {formData.department_id || 'None'}</p>
+                          </>
+                        ) : (
+                          <div className="text-amber-600">
+                            <p>⚠️ No department assigned to your account.</p>
+                            <p className="text-xs mt-1">
+                              <strong>Solution:</strong> Contact SuperAdmin to assign a department to your account, 
+                              or select a department manually below.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="description">Description (Optional)</Label>

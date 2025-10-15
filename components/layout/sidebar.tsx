@@ -21,7 +21,8 @@ import {
   IconAward,
   IconBell,
   IconHelp,
-  IconDownload
+  IconDownload,
+  IconStack
 } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { AuthUser } from '@/lib/auth'
@@ -66,6 +67,12 @@ const navigationItems = [
     name: 'Departments',
     href: '/departments',
     icon: IconBuilding,
+    roles: ['superadmin', 'dean']
+  },
+  {
+    name: 'Programs',
+    href: '/programs',
+    icon: IconStack,
     roles: ['superadmin', 'dean']
   },
   {

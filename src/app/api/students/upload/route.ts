@@ -16,6 +16,24 @@ export async function POST(request: Request) {
   console.log('Supabase Key exists:', !!supabaseKey)
   
   try {
+    // Get user information from request headers (set by middleware or client)
+    const userEmail = request.headers.get('x-user-email')
+    const userRole = request.headers.get('x-user-role')
+    
+    console.log('User info:', { email: userEmail, role: userRole })
+    
+    // If user is dean, get their department
+    let deanDepartmentId = null
+    if (userRole === 'dean' && userEmail) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('department_id')
+        .eq('email', userEmail)
+        .single()
+      
+      deanDepartmentId = userData?.department_id
+      console.log('Dean department ID:', deanDepartmentId)
+    }
     console.log('Parsing form data...')
     const formData = await request.formData()
     const file = formData.get('file') as File
@@ -209,6 +227,11 @@ export async function POST(request: Request) {
         if (!department) {
           const availableDepts = departments?.map(d => d.name).join(', ') || 'none'
           throw new Error(`Department "${departmentName}" not found. Available: ${availableDepts}`)
+        }
+
+        // If user is dean, validate they can only upload to their department
+        if (userRole === 'dean' && deanDepartmentId && department.id !== deanDepartmentId) {
+          throw new Error(`You can only upload students to your department. Selected: "${departmentName}"`)
         }
 
         // Find batch by name (case-insensitive, partial match)

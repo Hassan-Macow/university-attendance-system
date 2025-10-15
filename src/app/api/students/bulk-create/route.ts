@@ -5,6 +5,25 @@ export async function POST(request: NextRequest) {
   try {
     console.log('=== Creating Students in Bulk ===')
     
+    // Get user information from request headers
+    const userEmail = request.headers.get('x-user-email')
+    const userRole = request.headers.get('x-user-role')
+    
+    console.log('User info:', { email: userEmail, role: userRole })
+    
+    // If user is dean, get their department
+    let deanDepartmentId = null
+    if (userRole === 'dean' && userEmail) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('department_id')
+        .eq('email', userEmail)
+        .single()
+      
+      deanDepartmentId = userData?.department_id
+      console.log('Dean department ID:', deanDepartmentId)
+    }
+    
     // Test Supabase connection with timeout
     console.log('Testing Supabase connection...')
     let testData, testError
@@ -69,6 +88,12 @@ export async function POST(request: NextRequest) {
         // Validate required fields
         if (!student.full_name || !student.reg_no || !student.department_id || !student.batch_id) {
           errors.push(`Student ${i + 1}: Missing required fields`)
+          continue
+        }
+
+        // If user is dean, validate they can only create students in their department
+        if (userRole === 'dean' && deanDepartmentId && student.department_id !== deanDepartmentId) {
+          errors.push(`Student ${i + 1}: You can only create students in your department`)
           continue
         }
 
