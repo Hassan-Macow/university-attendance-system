@@ -45,3 +45,6 @@ CREATE TRIGGER update_students_updated_at
 -- VALUES 
 --   ('John Doe', '2024-CS-001', (SELECT id FROM departments WHERE name = 'Computer Science' LIMIT 1), (SELECT id FROM batches WHERE name = '2024-2025' LIMIT 1), (SELECT id FROM campuses LIMIT 1), 'john.doe@university.edu', '+1234567890'),
 --   ('Jane Smith', '2024-CS-002', (SELECT id FROM departments WHERE name = 'Computer Science' LIMIT 1), (SELECT id FROM batches WHERE name = '2024-2025' LIMIT 1), (SELECT id FROM campuses LIMIT 1), 'jane.smith@university.edu', '+1234567891');
+
+
+

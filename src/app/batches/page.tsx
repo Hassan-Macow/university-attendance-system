@@ -47,18 +47,6 @@ export default function BatchesPage() {
         `)
         .order('created_at', { ascending: false })
 
-      // If user is a dean, filter by their department
-      if (currentUser?.role === 'dean') {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('department_id')
-          .eq('id', currentUser.id)
-          .single()
-
-        if (userData?.department_id) {
-          query = query.eq('department_id', userData.department_id)
-        }
-      }
 
       const { data: batches, error } = await query
 

@@ -50,9 +50,9 @@ export function MainLayout({ children }: MainLayoutProps) {
   const navigation = [
     {
       name: 'Dashboard',
-      href: user?.role === 'lecturer' ? '/lecturer-dashboard' : user?.role === 'dean' ? '/dean-dashboard' : '/dashboard',
+      href: user?.role === 'lecturer' ? '/lecturer-dashboard' : '/dashboard',
       icon: LayoutDashboard,
-      roles: ['superadmin', 'dean', 'lecturer']
+      roles: ['superadmin', 'lecturer']
     },
     {
       name: 'Users',
@@ -64,67 +64,67 @@ export function MainLayout({ children }: MainLayoutProps) {
       name: 'Departments',
       href: '/departments',
       icon: Building2,
-      roles: ['superadmin', 'dean']
+      roles: ['superadmin']
     },
     {
       name: 'Programs',
       href: '/programs',
       icon: Layers,
-      roles: ['superadmin', 'dean']
+      roles: ['superadmin']
     },
     {
       name: 'Lecturers',
       href: '/lecturers',
       icon: UserCircle,
-      roles: ['superadmin', 'dean']
+      roles: ['superadmin']
     },
     {
       name: 'Students',
       href: '/students',
       icon: GraduationCap,
-      roles: ['superadmin', 'dean']
+      roles: ['superadmin']
     },
     {
       name: 'Batches',
       href: '/batches',
       icon: Users,
-      roles: ['superadmin', 'dean']
+      roles: ['superadmin']
     },
     {
       name: 'Courses',
       href: '/courses',
       icon: BookOpen,
-      roles: ['superadmin', 'dean']
+      roles: ['superadmin']
     },
     {
       name: 'Campuses',
       href: '/campuses',
       icon: Building2,
-      roles: ['superadmin', 'dean']
+      roles: ['superadmin']
     },
     {
       name: 'Schedules',
       href: '/schedules',
       icon: Calendar,
-      roles: ['superadmin', 'dean', 'lecturer']
+      roles: ['superadmin', 'lecturer']
     },
     {
       name: 'Attendance',
       href: '/attendance',
       icon: ClipboardCheck,
-      roles: ['superadmin', 'dean', 'lecturer']
+      roles: ['superadmin', 'lecturer']
     },
     {
       name: 'Reports',
       href: '/reports',
       icon: BarChart3,
-      roles: ['superadmin', 'dean']
+      roles: ['superadmin']
     },
     {
       name: 'Settings',
       href: '/settings',
       icon: Settings,
-      roles: ['superadmin', 'dean', 'lecturer']
+      roles: ['superadmin', 'lecturer']
     }
   ]
 

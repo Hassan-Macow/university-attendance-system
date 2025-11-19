@@ -18,7 +18,8 @@ import {
   IconBuilding,
   IconSchool,
   IconDownload,
-  IconUpload
+  IconUpload,
+  IconTrash
 } from '@tabler/icons-react'
 import { showToast } from '@/components/ui/toast'
 import type { User, UserRole } from '@/lib/types'
@@ -49,6 +50,8 @@ export default function UsersPage() {
   const [employeeIdError, setEmployeeIdError] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [formData, setFormData] = useState<UserFormData>({
     id: '',
     name: '',
@@ -557,10 +560,56 @@ export default function UsersPage() {
     alert('Bulk import feature will be implemented here')
   }
 
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return
+
+    try {
+      setIsCreating(true)
+      const { supabase } = await import('@/lib/supabase')
+
+      // If it's a lecturer, delete related records first
+      if (userToDelete.role === 'lecturer') {
+        // Delete lecturer_campuses relationships
+        await supabase
+          .from('lecturer_campuses')
+          .delete()
+          .eq('lecturer_id', userToDelete.id)
+
+        // Delete lecturer record
+        await supabase
+          .from('lecturers')
+          .delete()
+          .eq('user_id', userToDelete.id)
+      }
+
+      // Delete the user (this will cascade delete related records due to foreign keys)
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userToDelete.id)
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Deletion Failed', `Failed to delete user: ${error.message}`)
+        return
+      }
+
+      // Remove from local state
+      setUsers(users.filter(u => u.id !== userToDelete.id))
+      setShowDeleteModal(false)
+      setUserToDelete(null)
+      showToast.success('User Deleted', 'User has been deleted successfully')
+    } catch (error) {
+      console.error('Deletion error:', error)
+      showToast.error('Error', 'Failed to delete user')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'superadmin': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-      case 'dean': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
       case 'lecturer': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
       case 'student': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
@@ -590,7 +639,7 @@ export default function UsersPage() {
               User Management
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Manage lecturers, deans, and students
+              Manage lecturers and students
             </p>
           </div>
 
@@ -616,7 +665,7 @@ export default function UsersPage() {
               <CardHeader>
                 <CardTitle>{isEditing ? 'Edit User' : 'Create New User'}</CardTitle>
                 <CardDescription>
-                  {isEditing ? 'Update user information and settings' : 'Create accounts for lecturers, deans, or students'}
+                  {isEditing ? 'Update user information and settings' : 'Create accounts for lecturers or students'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -665,7 +714,6 @@ export default function UsersPage() {
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
                     >
                       <option value="lecturer">Lecturer</option>
-                      <option value="dean">Department Dean</option>
                       <option value="student">Student</option>
                     </select>
                   </div>
@@ -867,8 +915,16 @@ export default function UsersPage() {
                             >
                               <IconEdit className="h-4 w-4" />
                             </Button>
-                            <Button variant="outline" size="sm">
-                              <IconShield className="h-4 w-4" />
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                setUserToDelete(user)
+                                setShowDeleteModal(true)
+                              }}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <IconTrash className="h-4 w-4" />
                             </Button>
                           </div>
                         </td>
@@ -879,6 +935,50 @@ export default function UsersPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Delete Confirmation Modal */}
+          {showDeleteModal && userToDelete && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <Card className="w-full max-w-md">
+                <CardHeader>
+                  <CardTitle>Delete User</CardTitle>
+                  <CardDescription>
+                    Are you sure you want to delete this user? This action cannot be undone.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 mb-4">
+                    <p className="font-medium">{userToDelete.name}</p>
+                    <p className="text-sm text-muted-foreground">Email: {userToDelete.email}</p>
+                    <p className="text-sm text-muted-foreground">Role: {userToDelete.role}</p>
+                    {userToDelete.role === 'lecturer' && (
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                        ⚠️ This will also delete all associated lecturer records and course assignments.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowDeleteModal(false)
+                        setUserToDelete(null)
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteUser}
+                      disabled={isCreating}
+                    >
+                      {isCreating ? 'Deleting...' : 'Delete User'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </MainLayout>

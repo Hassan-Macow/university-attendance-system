@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, BookOpen, Edit } from 'lucide-react'
+import { Plus, BookOpen, Edit, Filter, X, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Course, Department, Batch, Program } from '@/lib/types'
 import { showToast } from '@/components/ui/toast'
 
@@ -16,11 +16,23 @@ export default function CoursesPage() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [programs, setPrograms] = useState<Program[]>([])
   const [batches, setBatches] = useState<Batch[]>([])
-  const [lecturers, setLecturers] = useState<any[]>([])
+  const [lecturers, setLecturers] = useState<any[]>([]) // For filter dropdown (lecturer records)
+  const [lecturerUsers, setLecturerUsers] = useState<any[]>([]) // For form dropdown (user records)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreating, setIsCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
+  const [filters, setFilters] = useState({
+    search: '',
+    department_id: '',
+    program_id: '',
+    batch_id: '',
+    lecturer_id: ''
+  })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -37,6 +49,7 @@ export default function CoursesPage() {
     fetchPrograms()
     fetchBatches()
     fetchLecturers()
+    fetchLecturerUsers()
   }, [])
 
   const fetchCourses = async () => {
@@ -61,18 +74,6 @@ export default function CoursesPage() {
         `)
         .order('created_at', { ascending: false })
 
-      // If user is a dean, filter by their department
-      if (currentUser?.role === 'dean') {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('department_id')
-          .eq('id', currentUser.id)
-          .single()
-
-        if (userData?.department_id) {
-          query = query.eq('department_id', userData.department_id)
-        }
-      }
 
       const { data: courses, error } = await query
 
@@ -179,50 +180,76 @@ export default function CoursesPage() {
 
   const fetchLecturers = async () => {
     try {
-      console.log('=== Fetching Lecturers with Multi-Campus Support ===')
+      console.log('=== Fetching Lecturers for Course Filter ===')
       const { supabase } = await import('@/lib/supabase')
       
-      // First try to use the view if it exists
-      const { data: lecturers, error } = await supabase
-        .from('lecturers_with_campuses')
-        .select('*')
+      // Fetch lecturer records with user info for the filter dropdown
+      // We need lecturer table IDs to match with course.lecturer_id
+      const { data: lecturerRecords, error: lecturerError } = await supabase
+        .from('lecturers')
+        .select(`
+          id,
+          user_id,
+          employee_id,
+          users!inner(
+            id,
+            name,
+            email
+          )
+        `)
         .order('created_at', { ascending: false })
 
-      if (error) {
-        console.log('View not available, falling back to basic query')
-        // Fallback to basic query if view doesn't exist
-        const { data: basicLecturers, error: basicError } = await supabase
-          .from('users')
-          .select(`
-            *,
-            campuses!inner(*),
-            departments(*)
-          `)
-          .eq('role', 'lecturer')
-          .order('created_at', { ascending: false })
-
-        if (basicError) {
-          console.error('Database error:', basicError)
-          showToast.error('Error', 'Failed to fetch lecturers from database')
-          return
-        }
-
-        setLecturers(basicLecturers || [])
-        return
-      }
-
-      console.log('Lecturers with campuses:', { data: lecturers, error })
-
-      if (error) {
-        console.error('Database error:', error)
+      if (lecturerError) {
+        console.error('Database error:', lecturerError)
         showToast.error('Error', 'Failed to fetch lecturers from database')
         return
       }
 
-      setLecturers(lecturers || [])
+      // Transform to include lecturer ID and user info
+      const lecturersWithInfo = (lecturerRecords || []).map(lecturer => ({
+        id: lecturer.id, // This is the lecturer table ID that matches course.lecturer_id
+        lecturer_id: lecturer.id,
+        user_id: lecturer.user_id,
+        name: lecturer.users?.name || 'Unknown Lecturer',
+        email: lecturer.users?.email || '',
+        employee_id: lecturer.employee_id
+      }))
+
+      setLecturers(lecturersWithInfo)
     } catch (error) {
       console.error('Failed to fetch lecturers:', error)
       showToast.error('Error', 'Failed to fetch lecturers')
+    }
+  }
+
+  const fetchLecturerUsers = async () => {
+    try {
+      console.log('=== Fetching Lecturer Users for Course Form ===')
+      const { supabase } = await import('@/lib/supabase')
+      
+      // Fetch users with role 'lecturer' for the form dropdown
+      // The form uses user_id to look up/create lecturer records
+      const { data: users, error } = await supabase
+        .from('users')
+        .select(`
+          id,
+          name,
+          email,
+          employee_id
+        `)
+        .eq('role', 'lecturer')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Error', 'Failed to fetch lecturer users from database')
+        return
+      }
+
+      setLecturerUsers(users || [])
+    } catch (error) {
+      console.error('Failed to fetch lecturer users:', error)
+      showToast.error('Error', 'Failed to fetch lecturer users')
     }
   }
 
@@ -326,6 +353,36 @@ export default function CoursesPage() {
         return
       }
 
+      // Get lecturer record ID from user_id (same logic as create)
+      let lecturerRecord = null
+      const { data: existingLecturer } = await supabase
+        .from('lecturers')
+        .select('*')
+        .eq('user_id', formData.lecturer_id)
+        .single()
+
+      if (existingLecturer) {
+        lecturerRecord = existingLecturer
+      } else {
+        // Create lecturer record if it doesn't exist
+        const { data: newLecturer, error: lecturerError } = await supabase
+          .from('lecturers')
+          .insert({
+            user_id: formData.lecturer_id,
+            department_id: formData.department_id,
+            employee_id: `EMP${Date.now()}`
+          })
+          .select('*')
+          .single()
+
+        if (lecturerError) {
+          console.error('Error creating lecturer record:', lecturerError)
+          showToast.error('Update Failed', `Failed to create lecturer record: ${lecturerError.message}`)
+          return
+        }
+        lecturerRecord = newLecturer
+      }
+
       const { data: course, error } = await supabase
         .from('courses')
         .update({
@@ -334,7 +391,7 @@ export default function CoursesPage() {
           department_id: formData.department_id,
           program_id: formData.program_id || null,
           batch_id: formData.batch_id,
-          lecturer_id: formData.lecturer_id,
+          lecturer_id: lecturerRecord.id, // Use the lecturer record ID
           credits: parseInt(formData.credits)
         })
         .eq('id', editingCourse.id)
@@ -364,6 +421,97 @@ export default function CoursesPage() {
     } catch (error) {
       console.error('Failed to create course:', error)
       showToast.error('Creation Failed', 'Failed to create course')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  // Filter courses based on selected filters
+  const filteredCourses = courses.filter(course => {
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase()
+      const matchesSearch = 
+        course.name?.toLowerCase().includes(searchLower) ||
+        course.code?.toLowerCase().includes(searchLower)
+      if (!matchesSearch) return false
+    }
+
+    // Department filter
+    if (filters.department_id && course.department_id !== filters.department_id) {
+      return false
+    }
+
+    // Program filter
+    if (filters.program_id) {
+      if (course.program_id !== filters.program_id) {
+        return false
+      }
+    }
+
+    // Batch filter
+    if (filters.batch_id && course.batch_id !== filters.batch_id) {
+      return false
+    }
+
+    // Lecturer filter
+    if (filters.lecturer_id && course.lecturer_id !== filters.lecturer_id) {
+      return false
+    }
+
+    return true
+  })
+
+  const hasActiveFilters = Object.values(filters).some(value => value !== '')
+
+  const clearFilters = () => {
+    setFilters({
+      search: '',
+      department_id: '',
+      program_id: '',
+      batch_id: '',
+      lecturer_id: ''
+    })
+    setCurrentPage(1) // Reset to first page when clearing filters
+  }
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredCourses.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedCourses = filteredCourses.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filters])
+
+  const handleDeleteCourse = async () => {
+    if (!courseToDelete) return
+
+    try {
+      setIsCreating(true)
+      const { supabase } = await import('@/lib/supabase')
+
+      const { error } = await supabase
+        .from('courses')
+        .delete()
+        .eq('id', courseToDelete.id)
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Deletion Failed', `Failed to delete course: ${error.message}`)
+        return
+      }
+
+      // Remove from local state
+      setCourses(courses.filter(c => c.id !== courseToDelete.id))
+      setShowDeleteModal(false)
+      setCourseToDelete(null)
+      showToast.success('Course Deleted', 'Course has been deleted successfully')
+    } catch (error) {
+      console.error('Deletion error:', error)
+      showToast.error('Error', 'Failed to delete course')
     } finally {
       setIsCreating(false)
     }
@@ -496,15 +644,10 @@ export default function CoursesPage() {
                       required
                     >
                       <option value="">Select a lecturer</option>
-                      {lecturers.map((lecturer) => (
+                      {lecturerUsers.map((lecturer) => (
                         <option key={lecturer.id} value={lecturer.id}>
                           {lecturer.name || 'Unknown Lecturer'}
-                          {lecturer.campuses && lecturer.campuses.length > 0 && (
-                            ` (${lecturer.campuses.map((c: any) => c.name).join(', ')})`
-                          )}
-                          {lecturer.primary_campus_name && !lecturer.campuses && (
-                            ` (${lecturer.primary_campus_name})`
-                          )}
+                          {lecturer.employee_id && ` (${lecturer.employee_id})`}
                         </option>
                       ))}
                     </select>
@@ -542,12 +685,116 @@ export default function CoursesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>All Courses</CardTitle>
-            <CardDescription>
-              List of all academic courses
-            </CardDescription>
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle>All Courses</CardTitle>
+                <CardDescription>
+                  List of all academic courses
+                </CardDescription>
+              </div>
+              {hasActiveFilters && (
+                <Button variant="outline" size="sm" onClick={clearFilters}>
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
+            {/* Filters Section */}
+            <div className="mb-6 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Filter className="h-4 w-4" />
+                Filters
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="search">Search</Label>
+                  <Input
+                    id="search"
+                    placeholder="Search by name or code..."
+                    value={filters.search}
+                    onChange={(e) => setFilters({...filters, search: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filter_department">Department</Label>
+                  <select
+                    id="filter_department"
+                    value={filters.department_id}
+                    onChange={(e) => {
+                      setFilters({...filters, department_id: e.target.value, program_id: ''})
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">All Departments</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filter_program">Program</Label>
+                  <select
+                    id="filter_program"
+                    value={filters.program_id}
+                    onChange={(e) => setFilters({...filters, program_id: e.target.value})}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!filters.department_id}
+                  >
+                    <option value="">All Programs</option>
+                    {programs
+                      .filter(prog => !filters.department_id || prog.department_id === filters.department_id)
+                      .map((program) => (
+                        <option key={program.id} value={program.id}>
+                          {program.name} ({program.code})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filter_batch">Batch</Label>
+                  <select
+                    id="filter_batch"
+                    value={filters.batch_id}
+                    onChange={(e) => setFilters({...filters, batch_id: e.target.value})}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">All Batches</option>
+                    {batches.map((batch) => (
+                      <option key={batch.id} value={batch.id}>
+                        {batch.name} - Year {batch.year_level}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filter_lecturer">Lecturer</Label>
+                  <select
+                    id="filter_lecturer"
+                    value={filters.lecturer_id}
+                    onChange={(e) => setFilters({...filters, lecturer_id: e.target.value})}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">All Lecturers</option>
+                    {lecturers.map((lecturer) => (
+                      <option key={lecturer.id} value={lecturer.id}>
+                        {lecturer.name || 'Unknown Lecturer'}
+                        {lecturer.employee_id && ` (${lecturer.employee_id})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <div className="text-sm text-muted-foreground">
+                  Showing {filteredCourses.length} of {courses.length} courses
+                </div>
+              )}
+            </div>
+
             {courses.length === 0 ? (
               <div className="text-center py-8">
                 <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -560,23 +807,36 @@ export default function CoursesPage() {
                   Add Course
                 </Button>
               </div>
+            ) : filteredCourses.length === 0 ? (
+              <div className="text-center py-8">
+                <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No courses match your filters</h3>
+                <p className="text-muted-foreground mb-4">
+                  Try adjusting your filter criteria
+                </p>
+                <Button variant="outline" onClick={clearFilters}>
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Filters
+                </Button>
+              </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Program</TableHead>
-                    <TableHead>Batch</TableHead>
-                    <TableHead>Lecturer</TableHead>
-                    <TableHead>Credits</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {courses.map((course) => (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Program</TableHead>
+                      <TableHead>Batch</TableHead>
+                      <TableHead>Lecturer</TableHead>
+                      <TableHead>Credits</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedCourses.map((course) => (
                     <TableRow key={course.id}>
                       <TableCell className="font-medium">{course.name}</TableCell>
                       <TableCell>{course.code}</TableCell>
@@ -601,15 +861,23 @@ export default function CoursesPage() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => {
+                            onClick={async () => {
                               setEditingCourse(course)
+                              // Need to get user_id from lecturer_id for the form
+                              const { supabase } = await import('@/lib/supabase')
+                              const { data: lecturerRecord } = await supabase
+                                .from('lecturers')
+                                .select('user_id')
+                                .eq('id', course.lecturer_id)
+                                .single()
+                              
                               setFormData({
                                 name: course.name,
                                 code: course.code,
                                 department_id: course.department_id,
                                 program_id: course.program_id || '',
                                 batch_id: course.batch_id,
-                                lecturer_id: course.lecturer_id,
+                                lecturer_id: lecturerRecord?.user_id || course.lecturer_id,
                                 credits: course.credits.toString()
                               })
                               setShowForm(true)
@@ -617,15 +885,138 @@ export default function CoursesPage() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setCourseToDelete(course)
+                              setShowDeleteModal(true)
+                            }}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="itemsPerPage" className="text-sm text-muted-foreground">
+                        Items per page:
+                      </Label>
+                      <select
+                        id="itemsPerPage"
+                        value={itemsPerPage}
+                        onChange={(e) => {
+                          setItemsPerPage(Number(e.target.value))
+                          setCurrentPage(1)
+                        }}
+                        className="flex h-9 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                      </select>
+                      <span className="text-sm text-muted-foreground">
+                        Showing {startIndex + 1}-{Math.min(endIndex, filteredCourses.length)} of {filteredCourses.length} courses
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                          // Show first page, last page, current page, and pages around current
+                          if (
+                            page === 1 ||
+                            page === totalPages ||
+                            (page >= currentPage - 1 && page <= currentPage + 1)
+                          ) {
+                            return (
+                              <Button
+                                key={page}
+                                variant={currentPage === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(page)}
+                                className="min-w-[2.5rem]"
+                              >
+                                {page}
+                              </Button>
+                            )
+                          } else if (page === currentPage - 2 || page === currentPage + 2) {
+                            return <span key={page} className="px-2">...</span>
+                          }
+                          return null
+                        })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && courseToDelete && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Delete Course</CardTitle>
+                <CardDescription>
+                  Are you sure you want to delete this course? This action cannot be undone.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 mb-4">
+                  <p className="font-medium">{courseToDelete.name}</p>
+                  <p className="text-sm text-muted-foreground">Code: {courseToDelete.code}</p>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDeleteModal(false)
+                      setCourseToDelete(null)
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteCourse}
+                    disabled={isCreating}
+                  >
+                    {isCreating ? 'Deleting...' : 'Delete Course'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
           </div>
         </div>
       </div>

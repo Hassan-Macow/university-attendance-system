@@ -110,25 +110,93 @@ export default function LecturerDashboard() {
         setCourses(coursesData.data)
       }
 
-      // Fetch today's sessions
-      const today = format(new Date(), 'yyyy-MM-dd')
-      const sessionsResponse = await fetch(`/api/sessions?lecturer_id=${lecturerId}&date=${today}&limit=100`)
-      const sessionsData = await sessionsResponse.json()
+      // Fetch all sessions for this lecturer (today and future)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayISO = today.toISOString()
       
-      if (sessionsData.data) {
+      // Fetch sessions directly from Supabase to ensure proper filtering
+      const { supabase } = await import('@/lib/supabase')
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from('class_sessions')
+        .select(`
+          id,
+          schedule_time,
+          duration_minutes,
+          room,
+          courses!inner(
+            id,
+            name,
+            code,
+            lecturer_id,
+            batches!inner(
+              id,
+              name
+            )
+          ),
+          campuses!inner(
+            id,
+            name
+          )
+        `)
+        .eq('lecturer_id', lecturerId) // Ensure we only get this lecturer's sessions
+        .gte('schedule_time', todayISO) // Only future and today's sessions
+        .order('schedule_time', { ascending: true })
+        .limit(100)
+      
+      if (sessionsError) {
+        console.error('Error fetching sessions:', sessionsError)
+        return
+      }
+      
+      let todayList: ClassSession[] = []
+      let upcomingList: ClassSession[] = []
+      
+      if (sessionsData) {
         const now = new Date()
-        const sessions = sessionsData.data
+        const todayEnd = new Date()
+        todayEnd.setHours(23, 59, 59, 999)
         
         // Split into today's and upcoming
-        const todayList = sessions.filter((s: ClassSession) => {
+        todayList = sessionsData.filter((s: any) => {
           const sessionTime = new Date(s.schedule_time)
-          return sessionTime <= now
-        })
+          return sessionTime >= today && sessionTime <= todayEnd
+        }).map((s: any) => ({
+          id: s.id,
+          schedule_time: s.schedule_time,
+          duration_minutes: s.duration_minutes,
+          room: s.room,
+          courses: {
+            name: s.courses.name,
+            code: s.courses.code,
+            batches: {
+              name: s.courses.batches.name
+            }
+          },
+          campuses: {
+            name: s.campuses.name
+          }
+        }))
         
-        const upcomingList = sessions.filter((s: ClassSession) => {
+        upcomingList = sessionsData.filter((s: any) => {
           const sessionTime = new Date(s.schedule_time)
-          return sessionTime > now
-        })
+          return sessionTime > todayEnd
+        }).map((s: any) => ({
+          id: s.id,
+          schedule_time: s.schedule_time,
+          duration_minutes: s.duration_minutes,
+          room: s.room,
+          courses: {
+            name: s.courses.name,
+            code: s.courses.code,
+            batches: {
+              name: s.courses.batches.name
+            }
+          },
+          campuses: {
+            name: s.campuses.name
+          }
+        }))
         
         setTodaySessions(todayList)
         setUpcomingSessions(upcomingList)
@@ -137,7 +205,7 @@ export default function LecturerDashboard() {
       // Calculate stats
       setStats({
         total_courses: coursesData.data?.length || 0,
-        total_sessions_today: sessionsData.data?.length || 0,
+        total_sessions_today: todayList.length,
         total_students: coursesData.data?.reduce((sum: number, course: any) => sum + (course.batches?.student_count || 0), 0) || 0,
         attendance_rate: 85 // This should come from actual attendance data
       })

@@ -26,14 +26,11 @@ export function MainLayout({ children }: MainLayoutProps) {
       // Redirect to appropriate dashboard if user is on wrong page
       if (currentUser && pathname === '/dashboard') {
         switch (currentUser.role) {
-          case 'dean':
-            router.push('/dean-dashboard')
-            break
           case 'lecturer':
             router.push('/lecturer-dashboard')
             break
           case 'student':
-            router.push('/student-dashboard')
+            router.push('/schedules')
             break
           case 'superadmin':
             // Superadmin can stay on main dashboard

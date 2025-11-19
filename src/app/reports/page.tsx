@@ -20,7 +20,9 @@ import {
   IconTarget,
   IconBook,
   IconBuilding,
-  IconRefresh
+  IconRefresh,
+  IconChevronLeft,
+  IconChevronRight
 } from '@tabler/icons-react'
 import { showToast } from '@/components/ui/toast'
 
@@ -28,12 +30,16 @@ interface AttendanceReport {
   id: string
   studentName: string
   regNo: string
+  studentId: string
   course: string
   courseName: string
+  courseId: string
   department: string
   date: string
+  timestamp: string // Store original timestamp for date operations
   status: string
   attendanceRate: number
+  absentCount: number // Number of times this student was absent
 }
 
 interface Stats {
@@ -42,8 +48,20 @@ interface Stats {
   absentToday: number
 }
 
+interface CourseStats {
+  courseId: string
+  courseName: string
+  courseCode: string
+  totalStudents: number
+  present: number
+  absent: number
+  late: number
+  attendanceRate: number
+}
+
 export default function ReportsPage() {
   const [reports, setReports] = useState<AttendanceReport[]>([])
+  const [courseStats, setCourseStats] = useState<CourseStats[]>([])
   const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
     presentToday: 0,
@@ -52,6 +70,8 @@ export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [departments, setDepartments] = useState<any[]>([])
   const [courses, setCourses] = useState<any[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(25)
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -101,10 +121,6 @@ export default function ReportsPage() {
   const fetchReports = async () => {
     try {
       const { supabase } = await import('@/lib/supabase')
-      
-      // Get current user to check role
-      const { getCurrentUser } = await import('@/lib/auth')
-      const currentUser = await getCurrentUser()
 
       let query = supabase
         .from('attendance')
@@ -112,13 +128,11 @@ export default function ReportsPage() {
           id,
           status,
           timestamp,
+          student_id,
           students!inner(
             id,
             full_name,
-            reg_no,
-            batches!inner(
-              courses!inner(department_id)
-            )
+            reg_no
           ),
           class_sessions!inner(
             id,
@@ -134,20 +148,7 @@ export default function ReportsPage() {
           )
         `)
         .order('timestamp', { ascending: false })
-        .limit(100)
-
-      // If user is a dean, filter by their department
-      if (currentUser?.role === 'dean') {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('department_id')
-          .eq('id', currentUser.id)
-          .single()
-
-        if (userData?.department_id) {
-          query = query.eq('class_sessions.courses.department_id', userData.department_id)
-        }
-      }
+        .limit(500) // Limit to prevent loading too much data
 
       // Apply date filters
       if (filters.startDate) {
@@ -159,6 +160,19 @@ export default function ReportsPage() {
         query = query.lte('timestamp', endDate.toISOString())
       }
 
+      // Apply course filter at database level
+      if (filters.course && filters.course !== 'all') {
+        query = query.eq('class_sessions.courses.id', filters.course)
+      }
+
+      // Apply department filter at database level
+      if (filters.department && filters.department !== 'all') {
+        const selectedDept = departments.find(d => d.name === filters.department)
+        if (selectedDept) {
+          query = query.eq('class_sessions.courses.department_id', selectedDept.id)
+        }
+      }
+
       const { data, error } = await query
 
       if (error) {
@@ -168,54 +182,180 @@ export default function ReportsPage() {
         return
       }
 
-      // Transform data and calculate attendance rates
-      const transformedReports: AttendanceReport[] = await Promise.all(
-        (data || []).map(async (record: any) => {
-          // Calculate attendance rate for this student
-          const studentId = record.students.id
-          const { data: studentAttendance } = await supabase
-            .from('attendance')
-            .select('status')
-            .eq('student_id', studentId)
+      // Get unique student IDs to batch calculate attendance rates and absent counts
+      const uniqueStudentIds = [...new Set((data || []).map((r: any) => r.student_id))]
+      
+      // Build query for student attendance - apply same filters
+      let attendanceQuery = supabase
+        .from('attendance')
+        .select('student_id, status, class_sessions!inner(courses!inner(id))')
+        .in('student_id', uniqueStudentIds)
 
-          const total = studentAttendance?.length || 0
-          const present = studentAttendance?.filter((a: any) => a.status === 'present').length || 0
-          const attendanceRate = total > 0 ? Math.round((present / total) * 100) : 0
+      // Apply same date filters
+      if (filters.startDate) {
+        attendanceQuery = attendanceQuery.gte('timestamp', new Date(filters.startDate).toISOString())
+      }
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate)
+        endDate.setHours(23, 59, 59, 999)
+        attendanceQuery = attendanceQuery.lte('timestamp', endDate.toISOString())
+      }
 
-          return {
-            id: record.id,
-            studentName: record.students.full_name,
-            regNo: record.students.reg_no,
-            course: record.class_sessions.courses.code,
-            courseName: record.class_sessions.courses.name,
-            department: record.class_sessions.courses.departments.name,
-            date: new Date(record.timestamp).toLocaleDateString(),
-            status: record.status,
-            attendanceRate
+      // Apply course filter if set
+      if (filters.course && filters.course !== 'all') {
+        attendanceQuery = attendanceQuery.eq('class_sessions.courses.id', filters.course)
+      }
+
+      // Apply department filter if set
+      if (filters.department && filters.department !== 'all') {
+        const selectedDept = departments.find(d => d.name === filters.department)
+        if (selectedDept) {
+          attendanceQuery = attendanceQuery.eq('class_sessions.courses.department_id', selectedDept.id)
+        }
+      }
+
+      const { data: allStudentAttendance } = await attendanceQuery
+
+      // Calculate attendance rates and absent counts for each student (in memory)
+      const studentAttendanceMap = new Map<string, { total: number; present: number; absent: number }>()
+      
+      if (allStudentAttendance) {
+        allStudentAttendance.forEach((att: any) => {
+          if (!studentAttendanceMap.has(att.student_id)) {
+            studentAttendanceMap.set(att.student_id, { total: 0, present: 0, absent: 0 })
+          }
+          const stats = studentAttendanceMap.get(att.student_id)!
+          stats.total++
+          if (att.status === 'present') {
+            stats.present++
+          } else if (att.status === 'absent') {
+            stats.absent++
           }
         })
-      )
-
-      // Apply additional filters
-      let filteredReports = transformedReports
-      if (filters.department && filters.department !== 'all') {
-        filteredReports = filteredReports.filter(r => 
-          r.department.toLowerCase().includes(filters.department.toLowerCase())
-        )
-      }
-      if (filters.course && filters.course !== 'all') {
-        filteredReports = filteredReports.filter(r => 
-          r.courseName.toLowerCase().includes(filters.course.toLowerCase()) ||
-          r.course.toLowerCase().includes(filters.course.toLowerCase())
-        )
       }
 
-      setReports(filteredReports)
+      // Transform data using pre-calculated attendance rates and absent counts
+      const transformedReports: AttendanceReport[] = (data || []).map((record: any) => {
+        const studentStats = studentAttendanceMap.get(record.student_id) || { total: 0, present: 0, absent: 0 }
+        const attendanceRate = studentStats.total > 0 
+          ? Math.round((studentStats.present / studentStats.total) * 100) 
+          : 0
+
+        return {
+          id: record.id,
+          studentName: record.students.full_name,
+          regNo: record.students.reg_no,
+          studentId: record.student_id,
+          course: record.class_sessions.courses.code,
+          courseName: record.class_sessions.courses.name,
+          courseId: record.class_sessions.courses.id,
+          department: record.class_sessions.courses.departments.name,
+          date: new Date(record.timestamp).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          }),
+          timestamp: record.timestamp, // Store original timestamp
+          status: record.status,
+          attendanceRate,
+          absentCount: studentStats.absent
+        }
+      })
+
+      setReports(transformedReports)
+
+      // Calculate course-level statistics
+      await calculateCourseStats(transformedReports)
     } catch (error) {
       console.error('Error loading reports:', error)
       showToast.error('Error', 'Failed to load attendance reports')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const calculateCourseStats = async (reports: AttendanceReport[]) => {
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      
+      // Group reports by course
+      const courseMap = new Map<string, {
+        courseId: string
+        courseName: string
+        courseCode: string
+        records: AttendanceReport[]
+      }>()
+
+      reports.forEach(report => {
+        if (!courseMap.has(report.courseId)) {
+          courseMap.set(report.courseId, {
+            courseId: report.courseId,
+            courseName: report.courseName,
+            courseCode: report.course,
+            records: []
+          })
+        }
+        courseMap.get(report.courseId)!.records.push(report)
+      })
+
+      // Get all course batch IDs in one query
+      const courseIds = Array.from(courseMap.keys())
+      const { data: coursesInfo } = await supabase
+        .from('courses')
+        .select('id, batch_id')
+        .in('id', courseIds)
+
+      const batchIds = [...new Set(coursesInfo?.map(c => c.batch_id).filter(Boolean) || [])]
+      
+      // Get all student counts for all batches in one query
+      const { data: batchStudentCounts } = await supabase
+        .from('students')
+        .select('batch_id')
+        .in('batch_id', batchIds)
+
+      // Count students per batch
+      const batchCountMap = new Map<string, number>()
+      batchStudentCounts?.forEach((s: any) => {
+        batchCountMap.set(s.batch_id, (batchCountMap.get(s.batch_id) || 0) + 1)
+      })
+
+      // Create course to batch mapping
+      const courseBatchMap = new Map<string, string>()
+      coursesInfo?.forEach(c => {
+        if (c.batch_id) {
+          courseBatchMap.set(c.id, c.batch_id)
+        }
+      })
+
+      // Calculate stats for each course (all in memory now, no more queries)
+      const stats: CourseStats[] = Array.from(courseMap.values()).map((courseData) => {
+        const batchId = courseBatchMap.get(courseData.courseId)
+        const totalStudents = batchId ? (batchCountMap.get(batchId) || 0) : 0
+
+        // Count attendance by status
+        const present = courseData.records.filter(r => r.status === 'present').length
+        const absent = courseData.records.filter(r => r.status === 'absent').length
+        const late = courseData.records.filter(r => r.status === 'late').length
+
+        // Calculate attendance rate
+        const totalRecords = courseData.records.length
+        const attendanceRate = totalRecords > 0 ? Math.round((present / totalRecords) * 100) : 0
+
+        return {
+          courseId: courseData.courseId,
+          courseName: courseData.courseName,
+          courseCode: courseData.courseCode,
+          totalStudents,
+          present,
+          absent,
+          late,
+          attendanceRate
+        }
+      })
+
+      setCourseStats(stats)
+    } catch (error) {
+      console.error('Error calculating course stats:', error)
     }
   }
 
@@ -264,7 +404,7 @@ export default function ReportsPage() {
     }
 
     // Prepare CSV data
-    const headers = ['Student Name', 'Registration No', 'Course Code', 'Course Name', 'Department', 'Date', 'Status', 'Attendance Rate (%)']
+    const headers = ['Student Name', 'Registration No', 'Course Code', 'Course Name', 'Department', 'Date', 'Status', 'Absent Count', 'Attendance Rate (%)']
     const csvData = reports.map(report => [
       report.studentName,
       report.regNo,
@@ -273,6 +413,7 @@ export default function ReportsPage() {
       report.department,
       report.date,
       report.status,
+      report.absentCount.toString(),
       report.attendanceRate.toString()
     ])
 
@@ -307,8 +448,20 @@ export default function ReportsPage() {
 
   const applyFilters = async () => {
     setIsLoading(true)
+    setCurrentPage(1) // Reset to first page when filters change
     await fetchReports()
   }
+
+  // Pagination calculations
+  const totalPages = Math.ceil(reports.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedReports = reports.slice(startIndex, endIndex)
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filters.startDate, filters.endDate, filters.department, filters.course])
 
   const clearFilters = () => {
     setFilters({
@@ -431,7 +584,7 @@ export default function ReportsPage() {
                     >
                       <option value="all">All Courses</option>
                       {courses.map((course) => (
-                        <option key={course.id} value={course.name}>
+                        <option key={course.id} value={course.id}>
                           {course.code} - {course.name}
                         </option>
                       ))}
@@ -451,6 +604,62 @@ export default function ReportsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Course Statistics - Show when course filter is applied */}
+          {filters.course && filters.course !== 'all' && courseStats.length > 0 && (
+            <div className="mb-8">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Course Attendance Summary</CardTitle>
+                  <CardDescription>
+                    Attendance statistics for the selected course
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {courseStats.map((stat) => (
+                      <div key={stat.courseId} className="space-y-4">
+                        <div>
+                          <h3 className="font-semibold text-lg">{stat.courseCode}</h3>
+                          <p className="text-sm text-muted-foreground">{stat.courseName}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <p className="text-xs text-muted-foreground">Total Students</p>
+                            <p className="text-xl font-bold">{stat.totalStudents}</p>
+                          </div>
+                          <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                            <p className="text-xs text-muted-foreground">Present</p>
+                            <p className="text-xl font-bold text-green-600 dark:text-green-400">{stat.present}</p>
+                          </div>
+                          <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                            <p className="text-xs text-muted-foreground">Absent</p>
+                            <p className="text-xl font-bold text-red-600 dark:text-red-400">{stat.absent}</p>
+                          </div>
+                          <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                            <p className="text-xs text-muted-foreground">Late</p>
+                            <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{stat.late}</p>
+                          </div>
+                        </div>
+                        <div className="pt-2 border-t">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-muted-foreground">Attendance Rate</span>
+                            <span className="text-sm font-semibold">{stat.attendanceRate}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-[#1B75BB] h-2 rounded-full transition-all" 
+                              style={{ width: `${stat.attendanceRate}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Summary Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -530,21 +739,23 @@ export default function ReportsPage() {
                   <p className="text-gray-600 dark:text-gray-400">Try adjusting your filters or check back later.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student Name</TableHead>
-                        <TableHead>Reg No</TableHead>
-                        <TableHead>Course</TableHead>
-                        <TableHead>Department</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Attendance Rate</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {reports.map((report) => (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Student Name</TableHead>
+                          <TableHead>Reg No</TableHead>
+                          <TableHead>Course</TableHead>
+                          <TableHead>Department</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Absent Count</TableHead>
+                          <TableHead>Attendance Rate</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedReports.map((report) => (
                         <TableRow key={report.id}>
                           <TableCell className="font-medium">{report.studentName}</TableCell>
                           <TableCell>{report.regNo}</TableCell>
@@ -555,17 +766,42 @@ export default function ReportsPage() {
                             </div>
                           </TableCell>
                           <TableCell>{report.department}</TableCell>
-                          <TableCell>{report.date}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{report.date}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(report.timestamp).toLocaleDateString('en-US', { 
+                                  weekday: 'short' 
+                                })}
+                              </span>
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
                               report.status === 'present' 
                                 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                                : report.status === 'late'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                                 : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                             }`}>
                               {report.status === 'present' && <IconCheck className="h-3 w-3 mr-1" />}
                               {report.status === 'absent' && <IconX className="h-3 w-3 mr-1" />}
                               {report.status}
                             </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className={`font-semibold ${
+                                report.absentCount > 5 
+                                  ? 'text-red-600 dark:text-red-400' 
+                                  : report.absentCount > 3
+                                  ? 'text-orange-600 dark:text-orange-400'
+                                  : 'text-gray-600 dark:text-gray-400'
+                              }`}>
+                                {report.absentCount}
+                              </span>
+                              <span className="text-xs text-muted-foreground">times</span>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center">
@@ -579,10 +815,83 @@ export default function ReportsPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="itemsPerPage" className="text-sm text-muted-foreground">
+                          Items per page:
+                        </Label>
+                        <select
+                          id="itemsPerPage"
+                          value={itemsPerPage}
+                          onChange={(e) => {
+                            setItemsPerPage(Number(e.target.value))
+                            setCurrentPage(1)
+                          }}
+                          className="flex h-9 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm"
+                        >
+                          <option value="10">10</option>
+                          <option value="25">25</option>
+                          <option value="50">50</option>
+                          <option value="100">100</option>
+                        </select>
+                        <span className="text-sm text-muted-foreground">
+                          Showing {startIndex + 1}-{Math.min(endIndex, reports.length)} of {reports.length} records
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          <IconChevronLeft className="h-4 w-4" />
+                          Previous
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                            if (
+                              page === 1 ||
+                              page === totalPages ||
+                              (page >= currentPage - 1 && page <= currentPage + 1)
+                            ) {
+                              return (
+                                <Button
+                                  key={page}
+                                  variant={currentPage === page ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setCurrentPage(page)}
+                                  className="min-w-[2.5rem]"
+                                >
+                                  {page}
+                                </Button>
+                              )
+                            } else if (page === currentPage - 2 || page === currentPage + 2) {
+                              return <span key={page} className="px-2">...</span>
+                            }
+                            return null
+                          })}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          Next
+                          <IconChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

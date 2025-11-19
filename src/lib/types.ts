@@ -1,4 +1,4 @@
-export type UserRole = 'superadmin' | 'dean' | 'lecturer' | 'student';
+export type UserRole = 'superadmin' | 'lecturer' | 'student';
 
 export interface BaseUser {
   id: string;
@@ -63,7 +63,7 @@ export interface Student {
   full_name: string;
   reg_no: string;
   department_id: string;
-  program_id?: string;
+  program_id?: string; // Optional link to program
   batch_id: string;
   campus_id: string;
   email?: string;

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { MainLayout } from '@/components/layout/main-layout'
 import { getCurrentUser } from '@/lib/auth'
 import { DashboardStats } from '@/lib/types'
+import { supabase } from '@/lib/supabase'
 import { 
   IconUsers,
   IconSchool,
@@ -42,6 +43,22 @@ import {
   Bar
 } from 'recharts'
 
+// Helper function to get department colors
+const getDepartmentColor = (departmentName: string): string => {
+  const colors = [
+    '#8884d8', '#82ca9d', '#ffc658', '#ff7300',
+    '#8dd1e1', '#d084d0', '#87d068', '#ffc0cb',
+    '#ffb347', '#98fb98', '#f0e68c', '#dda0dd'
+  ]
+  
+  let hash = 0
+  for (let i = 0; i < departmentName.length; i++) {
+    hash = departmentName.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  
+  return colors[Math.abs(hash) % colors.length]
+}
+
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -70,49 +87,154 @@ export default function DashboardPage() {
         const currentUser = await getCurrentUser()
         setUser(currentUser)
 
-        // Load dashboard stats and chart data in parallel
-        const [statsResponse, attendanceResponse, departmentResponse] = await Promise.all([
-          fetch('/api/dashboard-stats'),
-          fetch('/api/attendance-trend'),
-          fetch('/api/department-distribution')
+        console.log('Loading dashboard data from Supabase...')
+
+        // Fetch counts directly from Supabase
+        const [
+          { count: studentsCount },
+          { count: lecturersCount },
+          { count: coursesCount },
+          { count: departmentsCount },
+          { count: campusesCount }
+        ] = await Promise.all([
+          supabase.from('students').select('*', { count: 'exact', head: true }),
+          supabase.from('lecturers').select('*', { count: 'exact', head: true }),
+          supabase.from('courses').select('*', { count: 'exact', head: true }),
+          supabase.from('departments').select('*', { count: 'exact', head: true }),
+          supabase.from('campuses').select('*', { count: 'exact', head: true })
         ])
 
-        const [statsData, attendanceData, departmentData] = await Promise.all([
-          statsResponse.json(),
-          attendanceResponse.json(),
-          departmentResponse.json()
+        console.log('Counts:', { studentsCount, lecturersCount, coursesCount, departmentsCount, campusesCount })
+
+        // Calculate attendance rates
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+        const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+        const [
+          { data: todayAttendance },
+          { data: weekAttendance },
+          { data: monthAttendance }
+        ] = await Promise.all([
+          supabase
+            .from('attendance')
+            .select('status')
+            .gte('created_at', today.toISOString())
+            .lt('created_at', new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString()),
+          supabase
+            .from('attendance')
+            .select('status')
+            .gte('created_at', weekAgo.toISOString()),
+          supabase
+            .from('attendance')
+            .select('status')
+            .gte('created_at', monthAgo.toISOString())
         ])
-        
-        if (statsData.success) {
-          setStats(statsData.data)
-        } else {
-          console.error('Failed to load dashboard stats:', statsData.error)
+
+        const calculateAttendanceRate = (data: any[] | null) => {
+          if (!data || data.length === 0) return 0
+          const presentCount = data.filter(a => a.status === 'present').length
+          return Math.round((presentCount / data.length) * 100 * 10) / 10
         }
 
-        if (attendanceData.success) {
-          setAttendanceData(attendanceData.data)
-        } else {
-          console.error('Failed to load attendance data:', attendanceData.error)
+        const attendance_rate_today = calculateAttendanceRate(todayAttendance)
+        const attendance_rate_week = calculateAttendanceRate(weekAttendance)
+        const attendance_rate_month = calculateAttendanceRate(monthAttendance)
+
+        // Set stats
+        setStats({
+          total_students: studentsCount || 0,
+          total_lecturers: lecturersCount || 0,
+          total_courses: coursesCount || 0,
+          total_departments: departmentsCount || 0,
+          total_campuses: campusesCount || 0,
+          attendance_rate_today,
+          attendance_rate_week,
+          attendance_rate_month,
+          students_change: '+0%',
+          lecturers_change: '+0%',
+          courses_change: '+0%',
+          departments_change: '+0%',
+          attendance_today_change: '+0%',
+          attendance_week_change: '+0%',
+          attendance_month_change: '+0%'
+        })
+
+        // Fetch attendance trend data
+        const { data: attendanceTrendData } = await supabase
+          .from('attendance')
+          .select('created_at, status')
+          .gte('created_at', weekAgo.toISOString())
+          .order('created_at', { ascending: true })
+
+        // Group by day
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        const dailyStats = new Map<string, { present: number; total: number }>()
+
+        // Initialize all days
+        for (let i = 0; i < 7; i++) {
+          const date = new Date(today.getTime() - (6 - i) * 24 * 60 * 60 * 1000)
+          const dayName = dayNames[date.getDay()]
+          dailyStats.set(dayName, { present: 0, total: 0 })
         }
 
-        if (departmentData.success) {
-          setDepartmentData(departmentData.data)
-        } else {
-          console.error('Failed to load department data:', departmentData.error)
+        // Process attendance data
+        if (attendanceTrendData) {
+          attendanceTrendData.forEach(record => {
+            const date = new Date(record.created_at)
+            const dayName = dayNames[date.getDay()]
+            const dayData = dailyStats.get(dayName)
+            if (dayData) {
+              dayData.total++
+              if (record.status === 'present') {
+                dayData.present++
+              }
+            }
+          })
         }
+
+        // Convert to array
+        const trendData = Array.from(dailyStats.entries()).map(([dayName, data]) => {
+          const attendanceRate = data.total > 0 ? Math.round((data.present / data.total) * 100) : 0
+          return {
+            name: dayName,
+            attendance: attendanceRate,
+            students: data.total || 0
+          }
+        })
+
+        setAttendanceData(trendData)
+
+        // Fetch department distribution
+        const { data: departments } = await supabase
+          .from('departments')
+          .select('id, name')
+
+        if (departments) {
+          const departmentData = await Promise.all(
+            departments.map(async (dept) => {
+              const { count } = await supabase
+                .from('students')
+                .select('*', { count: 'exact', head: true })
+                .eq('department_id', dept.id)
+
+              return {
+                name: dept.name,
+                students: count || 0,
+                color: getDepartmentColor(dept.name)
+              }
+            })
+          )
+
+          // Sort by student count and filter out empty departments
+          departmentData.sort((a, b) => b.students - a.students)
+          setDepartmentData(departmentData.filter(d => d.students > 0))
+        }
+
+        console.log('Dashboard data loaded successfully')
       } catch (error) {
         console.error('Error loading dashboard data:', error)
-        // Fallback to demo data
-        setStats({
-          total_students: 1250,
-          total_lecturers: 85,
-          total_courses: 156,
-          total_departments: 12,
-          total_campuses: 3,
-          attendance_rate_today: 87.5,
-          attendance_rate_week: 82.3,
-          attendance_rate_month: 85.1
-        })
       } finally {
         setIsLoading(false)
       }
@@ -387,7 +509,7 @@ export default function DashboardPage() {
                 </>
               )}
               
-              {(user?.role === 'superadmin' || user?.role === 'dean') && (
+              {user?.role === 'superadmin' && (
                 <>
                   <a href="/students" className="p-4 border border-border rounded-lg hover:bg-accent transition-colors">
                     <div className="p-2 bg-purple-600 rounded-lg w-fit mb-3">

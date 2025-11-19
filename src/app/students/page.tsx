@@ -79,20 +79,6 @@ export default function StudentsPage() {
     const { getCurrentUser } = await import('@/lib/auth')
     const user = await getCurrentUser()
     
-    // If user is dean, fetch their department_id from database
-    if (user?.role === 'dean') {
-      const { supabase } = await import('@/lib/supabase')
-      const { data: userData } = await supabase
-        .from('users')
-        .select('department_id')
-        .eq('id', user.id)
-        .single()
-      
-      if (userData?.department_id) {
-        user.department_id = userData.department_id
-      }
-    }
-    
     setCurrentUser(user)
     
     fetchStudents()
@@ -101,12 +87,6 @@ export default function StudentsPage() {
     fetchBatches()
   }
 
-  // Auto-filter for deans to their department
-  useEffect(() => {
-    if (currentUser?.role === 'dean' && currentUser?.department_id && !filterDepartmentId) {
-      setFilterDepartmentId(currentUser.department_id)
-    }
-  }, [currentUser, departments, filterDepartmentId])
 
   const fetchStudents = async () => {
     try {
@@ -124,24 +104,6 @@ export default function StudentsPage() {
         `)
         .order('created_at', { ascending: false })
 
-      // If user is a dean, filter by their department
-      if (currentUser?.role === 'dean') {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('department_id')
-          .eq('id', currentUser.id)
-          .single()
-
-        console.log('🔍 Dean user data:', userData)
-        console.log('🔍 Department ID:', userData?.department_id)
-
-        if (userData?.department_id) {
-          query = query.eq('department_id', userData.department_id)
-          console.log('✅ Applied department filter:', userData.department_id)
-        } else {
-          console.warn('⚠️ Dean has no department_id assigned! Showing all data.')
-        }
-      }
 
       const { data, error } = await query
 
@@ -392,11 +354,6 @@ export default function StudentsPage() {
           file.name.endsWith('.csv')) {
         setUploadFile(file)
         
-        // Auto-select dean's department if user is dean
-        if (currentUser?.role === 'dean' && currentUser?.department_id) {
-          setSelectedDepartmentId(currentUser.department_id)
-          console.log('Auto-selected dean department:', currentUser.department_id)
-        }
       } else {
         showToast.error('Invalid File', 'Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file')
       }
@@ -802,7 +759,6 @@ export default function StudentsPage() {
                         value={selectedDepartmentId}
                         onChange={(e) => setSelectedDepartmentId(e.target.value)}
                         className="w-full px-3 py-2 border border-input rounded-md bg-background"
-                        disabled={currentUser?.role === 'dean'}
                       >
                         <option value="">Select Department</option>
                         {departments.map(dept => (
@@ -811,11 +767,6 @@ export default function StudentsPage() {
                           </option>
                         ))}
                       </select>
-                      {currentUser?.role === 'dean' && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Department is automatically set to your department
-                        </p>
-                      )}
                     </div>
                     <div>
                       <Label className="text-sm font-medium mb-2 block">Batch for All Students *</Label>
@@ -915,7 +866,6 @@ export default function StudentsPage() {
                     id="department-filter"
                     value={filterDepartmentId}
                     onChange={(e) => setFilterDepartmentId(e.target.value)}
-                    disabled={currentUser?.role === 'dean'}
                     className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="">All Departments</option>
@@ -925,11 +875,6 @@ export default function StudentsPage() {
                       </option>
                     ))}
                   </select>
-                  {currentUser?.role === 'dean' && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Showing only your department students
-                    </p>
-                  )}
                 </div>
                 
                 {/* Batch Filter */}

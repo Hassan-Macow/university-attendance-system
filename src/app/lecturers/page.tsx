@@ -47,8 +47,8 @@ export default function LecturersPage() {
         `)
         .order('created_at', { ascending: false })
 
-      // Filter by department for deans
-      if (currentUser?.role === 'dean') {
+      // Filter removed - superadmin sees all
+      if (false) {
         const { data: userData } = await supabase
           .from('users')
           .select('department_id')

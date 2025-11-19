@@ -37,26 +37,6 @@ export default function ProgramsPage() {
     console.log('=== Loading User Data ===')
     console.log('Initial user:', user)
     
-    // If user is dean, fetch their department_id from database
-    if (user?.role === 'dean') {
-      console.log('User is dean, fetching department_id...')
-      const { supabase } = await import('@/lib/supabase')
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('department_id')
-        .eq('id', user.id)
-        .single()
-      
-      console.log('Department query result:', { data: userData, error })
-      
-      if (userData?.department_id) {
-        user.department_id = userData.department_id
-        console.log('Set department_id to:', user.department_id)
-      } else {
-        console.log('No department_id found for user')
-      }
-    }
-    
     console.log('Final user before setting state:', user)
     setCurrentUser(user)
     fetchPrograms()
@@ -80,18 +60,6 @@ export default function ProgramsPage() {
         `)
         .order('created_at', { ascending: false })
 
-      // If user is a dean, filter by their department
-      if (currentUser?.role === 'dean') {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('department_id')
-          .eq('id', currentUser.id)
-          .single()
-
-        if (userData?.department_id) {
-          query = query.eq('department_id', userData.department_id)
-        }
-      }
 
       const { data: programs, error } = await query
 
@@ -126,8 +94,8 @@ export default function ProgramsPage() {
         .select('*')
         .order('created_at', { ascending: false })
 
-      // If user is a dean, filter by their department
-      if (currentUser?.role === 'dean') {
+      // Filter removed - superadmin sees all
+      if (false) {
         const { data: userData } = await supabase
           .from('users')
           .select('department_id')
@@ -309,62 +277,16 @@ export default function ProgramsPage() {
           <div>
             <h1 className="text-3xl font-bold">Programs</h1>
             <p className="text-muted-foreground">
-              {currentUser?.role === 'dean' ? 'Manage programs in your department' : 'Manage academic programs within departments'}
+              Manage academic programs within departments
             </p>
           </div>
           <Button onClick={async () => {
             setEditingProgram(null)
             
-            // If user is dean, ensure we have their department_id
-            let deanDepartmentId = ''
-            if (currentUser?.role === 'dean') {
-              console.log('Dean user detected, checking department_id...')
-              console.log('Current user department_id:', currentUser.department_id)
-              
-              if (currentUser.department_id) {
-                deanDepartmentId = currentUser.department_id
-                console.log('Using existing department_id:', deanDepartmentId)
-              } else {
-                console.log('No department_id in currentUser, fetching from database...')
-                // Fetch department_id if not available
-                const { supabase } = await import('@/lib/supabase')
-                const { data: userData, error } = await supabase
-                  .from('users')
-                  .select('department_id')
-                  .eq('id', currentUser.id)
-                  .single()
-                
-                console.log('Database query result:', { data: userData, error })
-                
-                if (userData?.department_id) {
-                  deanDepartmentId = userData.department_id
-                  // Update currentUser with department_id
-                  currentUser.department_id = userData.department_id
-                  console.log('Fetched and set department_id:', deanDepartmentId)
-                } else {
-                  console.log('No department_id found in database for dean user')
-                  console.log('Available departments:', departments)
-                  
-                  // Show detailed error message
-                  showToast.error('Configuration Error', 
-                    'Dean user does not have a department assigned in the database. ' +
-                    'Please contact SuperAdmin to assign a department to your account, ' +
-                    'or select a department manually if you have permission.'
-                  )
-                  
-                  // Don't return, let the form open with empty department_id
-                  // The user can select a department manually
-                }
-              }
-            }
-            
-            console.log('Setting form data with department_id:', deanDepartmentId)
-            console.log('Current user:', currentUser)
-            
             setFormData({ 
               name: '', 
               code: '', 
-              department_id: deanDepartmentId, 
+              department_id: '', 
               description: '' 
             })
             setShowForm(!showForm)
@@ -416,7 +338,6 @@ export default function ProgramsPage() {
                       onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       required
-                      disabled={currentUser?.role === 'dean' && currentUser?.department_id}
                     >
                       <option value="">Select a department</option>
                       {departments.map((department) => (
@@ -425,7 +346,7 @@ export default function ProgramsPage() {
                         </option>
                       ))}
                     </select>
-                    {currentUser?.role === 'dean' && (
+                    {false && (
                       <div className="text-xs text-muted-foreground">
                         {currentUser?.department_id ? (
                           <>

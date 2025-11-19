@@ -22,18 +22,6 @@ export async function POST(request: Request) {
     
     console.log('User info:', { email: userEmail, role: userRole })
     
-    // If user is dean, get their department
-    let deanDepartmentId = null
-    if (userRole === 'dean' && userEmail) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('department_id')
-        .eq('email', userEmail)
-        .single()
-      
-      deanDepartmentId = userData?.department_id
-      console.log('Dean department ID:', deanDepartmentId)
-    }
     console.log('Parsing form data...')
     const formData = await request.formData()
     const file = formData.get('file') as File
@@ -229,8 +217,8 @@ export async function POST(request: Request) {
           throw new Error(`Department "${departmentName}" not found. Available: ${availableDepts}`)
         }
 
-        // If user is dean, validate they can only upload to their department
-        if (userRole === 'dean' && deanDepartmentId && department.id !== deanDepartmentId) {
+        // Department validation
+        if (false) {
           throw new Error(`You can only upload students to your department. Selected: "${departmentName}"`)
         }
 

@@ -208,9 +208,6 @@ export function hasPermission(user: AuthUser, action: string, resource?: string)
   switch (user.role) {
     case 'superadmin':
       return true // SuperAdmin can do everything
-    case 'dean':
-      // Dean can only access their department
-      return action !== 'manage_campuses' && action !== 'manage_global_settings'
     case 'lecturer':
       // Lecturer can only view assigned courses and take attendance
       return action === 'view_courses' || action === 'take_attendance'

@@ -40,22 +40,10 @@ const navigationItems = [
     roles: ['superadmin']
   },
   {
-    name: 'Dean Dashboard',
-    href: '/dean-dashboard',
-    icon: IconLayoutDashboard,
-    roles: ['dean']
-  },
-  {
     name: 'Lecturer Dashboard',
     href: '/lecturer-dashboard',
     icon: IconLayoutDashboard,
     roles: ['lecturer']
-  },
-  {
-    name: 'Student Dashboard',
-    href: '/student-dashboard',
-    icon: IconLayoutDashboard,
-    roles: ['student']
   },
   {
     name: 'Campuses',
@@ -67,37 +55,37 @@ const navigationItems = [
     name: 'Departments',
     href: '/departments',
     icon: IconBuilding,
-    roles: ['superadmin', 'dean']
+    roles: ['superadmin']
   },
   {
     name: 'Programs',
     href: '/programs',
     icon: IconStack,
-    roles: ['superadmin', 'dean']
+    roles: ['superadmin']
   },
   {
     name: 'Students',
     href: '/students',
     icon: IconUsers,
-    roles: ['superadmin', 'dean']
+    roles: ['superadmin']
   },
   {
     name: 'Batches',
     href: '/batches',
     icon: IconUsers,
-    roles: ['superadmin', 'dean']
+    roles: ['superadmin']
   },
   {
     name: 'Courses',
     href: '/courses',
     icon: IconBook,
-    roles: ['superadmin', 'dean']
+    roles: ['superadmin']
   },
   {
     name: 'Schedules',
     href: '/schedules',
     icon: IconCalendar,
-    roles: ['superadmin', 'dean', 'lecturer', 'student']
+    roles: ['superadmin', 'lecturer', 'student']
   },
   {
     name: 'Take Attendance',
@@ -121,7 +109,7 @@ const navigationItems = [
     name: 'Reports',
     href: '/reports',
     icon: IconChartBar,
-    roles: ['superadmin', 'dean']
+    roles: ['superadmin']
   },
   {
     name: 'User Management',
@@ -133,7 +121,7 @@ const navigationItems = [
     name: 'Settings',
     href: '/settings',
     icon: IconSettings,
-    roles: ['superadmin', 'dean', 'lecturer']
+    roles: ['superadmin', 'lecturer']
   }
 ]
 

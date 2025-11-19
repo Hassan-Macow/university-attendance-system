@@ -44,14 +44,11 @@ export default function LoginPage() {
         case 'superadmin':
           router.push('/dashboard')
           break
-        case 'dean':
-          router.push('/dean-dashboard')
-          break
         case 'lecturer':
           router.push('/lecturer-dashboard')
           break
         case 'student':
-          router.push('/student-dashboard')
+          router.push('/schedules')
           break
         default:
           router.push('/dashboard')

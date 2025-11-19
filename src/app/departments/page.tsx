@@ -54,18 +54,6 @@ export default function DepartmentsPage() {
         `)
         .order('created_at', { ascending: false })
 
-      // If user is a dean, filter by their department only
-      if (currentUser?.role === 'dean') {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('department_id')
-          .eq('id', currentUser.id)
-          .single()
-
-        if (userData?.department_id) {
-          query = query.eq('id', userData.department_id)
-        }
-      }
 
       const { data: departments, error } = await query
 
@@ -241,7 +229,7 @@ export default function DepartmentsPage() {
           <div>
             <h1 className="text-3xl font-bold">Departments</h1>
             <p className="text-muted-foreground">
-              {currentUser?.role === 'dean' ? 'View your assigned department' : 'Manage academic departments within campuses'}
+              Manage academic departments within campuses
             </p>
           </div>
           {currentUser?.role === 'superadmin' && (
