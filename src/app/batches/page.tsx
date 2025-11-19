@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Users, Edit } from 'lucide-react'
+import { Plus, Users, Edit, Trash2 } from 'lucide-react'
 import { Batch, Department } from '@/lib/types'
 import { showToast } from '@/components/ui/toast'
 
@@ -18,6 +18,8 @@ export default function BatchesPage() {
   const [isCreating, setIsCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null)
+  const [batchToDelete, setBatchToDelete] = useState<Batch | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     year_level: '',
@@ -183,6 +185,65 @@ export default function BatchesPage() {
     } catch (error) {
       console.error('Failed to create batch:', error)
       showToast.error('Creation Failed', 'Failed to create batch')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleDeleteBatch = async () => {
+    if (!batchToDelete) return
+
+    try {
+      setIsCreating(true)
+      const { supabase } = await import('@/lib/supabase')
+
+      // Check if batch has students or courses (optional - for warning)
+      const { data: students } = await supabase
+        .from('students')
+        .select('id')
+        .eq('batch_id', batchToDelete.id)
+        .limit(1)
+
+      const { data: courses } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('batch_id', batchToDelete.id)
+        .limit(1)
+
+      if (students && students.length > 0) {
+        showToast.error('Cannot Delete', 'This batch has students assigned. Please remove students first.')
+        setShowDeleteModal(false)
+        setBatchToDelete(null)
+        return
+      }
+
+      if (courses && courses.length > 0) {
+        showToast.error('Cannot Delete', 'This batch has courses assigned. Please remove courses first.')
+        setShowDeleteModal(false)
+        setBatchToDelete(null)
+        return
+      }
+
+      // Delete the batch
+      const { error } = await supabase
+        .from('batches')
+        .delete()
+        .eq('id', batchToDelete.id)
+
+      if (error) {
+        console.error('Database error:', error)
+        showToast.error('Deletion Failed', `Failed to delete batch: ${error.message}`)
+        return
+      }
+
+      // Remove from local state
+      setBatches(batches.filter(b => b.id !== batchToDelete.id))
+      setShowDeleteModal(false)
+      setBatchToDelete(null)
+      showToast.success('Batch Deleted', 'Batch has been deleted successfully')
+    } catch (error) {
+      console.error('Deletion error:', error)
+      showToast.error('Error', 'Failed to delete batch')
     } finally {
       setIsCreating(false)
     }
@@ -363,6 +424,17 @@ export default function BatchesPage() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setBatchToDelete(batch)
+                              setShowDeleteModal(true)
+                            }}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -372,6 +444,51 @@ export default function BatchesPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && batchToDelete && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Delete Batch</CardTitle>
+                <CardDescription>
+                  Are you sure you want to delete this batch? This action cannot be undone.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 mb-4">
+                  <p className="font-medium">{batchToDelete.name}</p>
+                  <p className="text-sm text-muted-foreground">Year Level: {batchToDelete.year_level}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Department: {departments.find(dept => dept.id === batchToDelete.department_id)?.name || 'N/A'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Academic Year: {batchToDelete.academic_year}</p>
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                    ⚠️ This will fail if the batch has students or courses assigned. Please remove them first.
+                  </p>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDeleteModal(false)
+                      setBatchToDelete(null)
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteBatch}
+                    disabled={isCreating}
+                  >
+                    {isCreating ? 'Deleting...' : 'Delete Batch'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
           </div>
         </div>
       </div>
