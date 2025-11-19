@@ -96,14 +96,16 @@ export default function ProgramsPage() {
 
       // Filter removed - superadmin sees all
       if (false) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('department_id')
-          .eq('id', currentUser.id)
-          .single()
+        if (currentUser) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('department_id')
+            .eq('id', currentUser.id)
+            .single()
 
-        if (userData?.department_id) {
-          query = query.eq('id', userData.department_id)
+          if (userData && userData.department_id) {
+            query = query.eq('id', userData.department_id)
+          }
         }
       }
 

@@ -183,7 +183,7 @@ export default function ReportsPage() {
       }
 
       // Get unique student IDs to batch calculate attendance rates and absent counts
-      const uniqueStudentIds = [...new Set((data || []).map((r: any) => r.student_id))]
+      const uniqueStudentIds = Array.from(new Set((data || []).map((r: any) => r.student_id)))
       
       // Build query for student attendance - apply same filters
       let attendanceQuery = supabase
@@ -305,7 +305,7 @@ export default function ReportsPage() {
         .select('id, batch_id')
         .in('id', courseIds)
 
-      const batchIds = [...new Set(coursesInfo?.map(c => c.batch_id).filter(Boolean) || [])]
+      const batchIds = Array.from(new Set(coursesInfo?.map(c => c.batch_id).filter(Boolean) || []))
       
       // Get all student counts for all batches in one query
       const { data: batchStudentCounts } = await supabase

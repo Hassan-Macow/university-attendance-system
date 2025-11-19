@@ -1021,9 +1021,9 @@ export default function SchedulesPage() {
                       room: '',
                       repeat_mode: 'single',
                       selected_days: [],
-                      start_date: '',
-                      end_date: '',
-                      weeks: 4
+                      semester_weeks: 8,
+                      semester_start_date: '',
+                      semester_end_date: ''
                     })
                   }}>
                     Cancel
@@ -1460,7 +1460,12 @@ export default function SchedulesPage() {
                             campus_id: '',
                             schedule_time: '',
                             duration_minutes: 60,
-                            room: ''
+                            room: '',
+                            repeat_mode: 'single',
+                            selected_days: [],
+                            semester_weeks: 8,
+                            semester_start_date: '',
+                            semester_end_date: ''
                           })
                         }}
                         variant="outline"
@@ -1485,8 +1490,13 @@ export default function SchedulesPage() {
                             lecturer_id: selectedSchedule.lecturer_id,
                             campus_id: selectedSchedule.campus_id,
                             schedule_time: new Date(selectedSchedule.schedule_time).toISOString().slice(0, 16),
-                            duration_minutes: selectedSchedule.duration_minutes,
-                            room: selectedSchedule.room
+                            duration_minutes: selectedSchedule.duration_minutes || 60,
+                            room: selectedSchedule.room || '',
+                            repeat_mode: 'single',
+                            selected_days: [],
+                            semester_weeks: 8,
+                            semester_start_date: '',
+                            semester_end_date: ''
                           })
                         }}
                         variant="outline"

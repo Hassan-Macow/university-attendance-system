@@ -206,12 +206,12 @@ export default function CoursesPage() {
       }
 
       // Transform to include lecturer ID and user info
-      const lecturersWithInfo = (lecturerRecords || []).map(lecturer => ({
+      const lecturersWithInfo = (lecturerRecords || []).map((lecturer: any) => ({
         id: lecturer.id, // This is the lecturer table ID that matches course.lecturer_id
         lecturer_id: lecturer.id,
         user_id: lecturer.user_id,
-        name: lecturer.users?.name || 'Unknown Lecturer',
-        email: lecturer.users?.email || '',
+        name: (lecturer.users as any)?.name ?? 'Unknown Lecturer',
+        email: (lecturer.users as any)?.email ?? '',
         employee_id: lecturer.employee_id
       }))
 
