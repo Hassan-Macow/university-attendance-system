@@ -47,7 +47,7 @@ export default function SettingsPage() {
     try {
       // Get current user
       const currentUser = await getCurrentUser()
-      if (!currentUser) {
+      if (!currentUser || !currentUser.email || !currentUser.id) {
         showToast.error('Error', 'User not found. Please log in again.')
         return
       }

@@ -52,11 +52,11 @@ export default function LecturersPage() {
         const { data: userData } = await supabase
           .from('users')
           .select('department_id')
-          .eq('id', currentUser.id)
+          .eq('id', currentUser?.id || '')
           .single()
 
-        if (userData && userData.department_id) {
-          query = query.eq('department_id', userData.department_id)
+        if (userData?.department_id) {
+          query = query.eq('department_id', userData?.department_id)
         }
       }
 
