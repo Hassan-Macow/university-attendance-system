@@ -70,9 +70,8 @@ export default function SchedulesPage() {
     }
   }
 
-  // Check if user can create schedules
   const canCreateSchedule = () => {
-    return currentUser ? (currentUser.role === 'superadmin' || currentUser.role === 'lecturer') : false
+    return currentUser ? (currentUser.role === 'superadmin') : false
   }
 
   const fetchSchedules = async (user?: AuthUser | null) => {
@@ -1447,7 +1446,7 @@ export default function SchedulesPage() {
             </div>
 
             <div className="p-6 border-t bg-gray-50 dark:bg-gray-900">
-              {currentUser && (currentUser?.role === 'superadmin' || currentUser?.role === 'lecturer') && (
+              {currentUser && (currentUser?.role === 'superadmin') && (
                 <div className="flex gap-3">
                   {isEditingSchedule ? (
                     <>
